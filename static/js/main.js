@@ -160,6 +160,9 @@ function updateTime() {
 
 // 显示模块
 function showModule(moduleName) {
+    const swipeIndicator = document.querySelector('.swipe-indicator');
+    if (swipeIndicator) swipeIndicator.style.display = 'none';
+
     // 隐藏所有模块
     const modules = document.querySelectorAll('.module');
     modules.forEach(module => {
@@ -179,6 +182,9 @@ function showModule(moduleName) {
 
 // 返回主界面
 function showMainInterface() {
+    const swipeIndicator = document.querySelector('.swipe-indicator');
+    if (swipeIndicator) swipeIndicator.style.display = 'flex';
+
     // 隐藏所有模块
     const modules = document.querySelectorAll('.module');
     modules.forEach(module => {

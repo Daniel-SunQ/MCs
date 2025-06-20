@@ -153,7 +153,7 @@ body {
     height: calc(100vh - 75px);
     display: flex;
     flex-direction: column;
-    justify-content: center;
+    justify-content: space-between;
     position: relative;
 }
 
@@ -176,6 +176,7 @@ body {
     margin-bottom: 50px;
     position: relative;
     z-index: 1;
+    color: var(--text-secondary);
 }
 
 .welcome-section h1 {
@@ -200,13 +201,22 @@ body {
     color: var(--text-secondary);
 }
 
+.main-content-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    flex-grow: 1;
+    margin-bottom: 20px;
+}
+
 .function-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 25px;
-    margin-bottom: 50px;
     position: relative;
     z-index: 1;
+    flex-grow: 1;
 }
 
 .function-card {
@@ -220,6 +230,7 @@ body {
     border: 1px solid rgba(0, 212, 255, 0.2);
     position: relative;
     overflow: hidden;
+    opacity: 0.8;
 }
 
 .function-card::before {
@@ -274,9 +285,10 @@ body {
 
 /* 语音控制按钮 */
 .voice-control {
-    text-align: center;
-    position: relative;
-    z-index: 1;
+    position: absolute;
+    bottom: 30px;
+    right: 30px;
+    z-index: 101;
 }
 
 .voice-btn {
@@ -291,7 +303,7 @@ body {
     display: flex;
     align-items: center;
     gap: 15px;
-    margin: 0 auto;
+    margin: 0;
     position: relative;
     overflow: hidden;
     box-shadow: 0 10px 30px rgba(0, 212, 255, 0.3);
@@ -349,9 +361,7 @@ body {
 
 /* 疲劳检测模块 */
 .fatigue-detection {
-    position: absolute;
-    top: 100px;
-    right: 30px;
+    position: relative;
     background: linear-gradient(135deg, rgba(255, 170, 0, 0.1) 0%, rgba(26, 26, 26, 0.8) 100%);
     backdrop-filter: blur(20px);
     border-radius: 20px;
@@ -359,6 +369,7 @@ body {
     border: 1px solid rgba(255, 170, 0, 0.3);
     width: 200px;
     z-index: 50;
+    flex-shrink: 0;
 }
 
 .fatigue-status {
@@ -418,9 +429,7 @@ body {
 
 /* 个性化设置模块 */
 .personalization {
-    position: absolute;
-    top: 100px;
-    left: 30px;
+    position: relative;
     background: linear-gradient(135deg, rgba(78, 205, 196, 0.1) 0%, rgba(26, 26, 26, 0.8) 100%);
     backdrop-filter: blur(20px);
     border-radius: 20px;
@@ -428,6 +437,7 @@ body {
     border: 1px solid rgba(78, 205, 196, 0.3);
     width: 180px;
     z-index: 50;
+    flex-shrink: 0;
 }
 
 .personalization h3 {
@@ -500,48 +510,60 @@ body {
 }
 
 .module.active {
-    transform: translateX(0);
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
 }
 
 .module-header {
-    display: flex;
+    display: flex !important;
     align-items: center;
+    padding-bottom: 25px;
     margin-bottom: 30px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid rgba(0, 212, 255, 0.2);
     position: relative;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+    opacity: 1 !important;
+    visibility: visible !important;
 }
 
 .module-header::after {
     content: '';
     position: absolute;
-    bottom: -1px;
     left: 0;
+    bottom: 0;
     width: 100px;
     height: 2px;
     background: linear-gradient(90deg, var(--primary-color), transparent);
 }
 
-.back-btn {
-    background: linear-gradient(135deg, rgba(0, 212, 255, 0.1) 0%, rgba(26, 26, 26, 0.8) 100%);
-    border: 1px solid rgba(0, 212, 255, 0.3);
-    border-radius: 50%;
-    width: 55px;
-    height: 55px;
-    color: var(--primary-color);
-    font-size: 1.3rem;
-    cursor: pointer;
-    margin-right: 25px;
-    transition: all 0.3s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.module-footer {
+    text-align: center;
+    margin-top: 40px;
 }
 
-.back-btn:hover {
-    background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(26, 26, 26, 0.9) 100%);
-    transform: scale(1.1);
-    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+.back-btn-footer {
+    background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
+    border: none;
+    border-radius: 30px;
+    padding: 15px 40px;
+    color: var(--bg-color);
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 20px rgba(0, 212, 255, 0.3);
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.back-btn-footer:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0, 212, 255, 0.5);
+}
+
+.back-btn-footer i {
+    font-size: 1.2rem;
 }
 
 .module-header h2 {
@@ -1332,6 +1354,16 @@ body {
         grid-template-columns: repeat(2, 1fr);
     }
     
+    .main-content-wrapper {
+        flex-direction: column;
+    }
+    
+    .fatigue-detection,
+    .personalization {
+        width: 100%;
+        margin-bottom: 20px;
+    }
+
     .vehicle-status-grid {
         grid-template-columns: 1fr;
     }

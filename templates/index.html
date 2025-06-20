@@ -35,36 +35,68 @@
                         <p>欢迎使用您的智能驾驶助手</p>
                     </div>
                     
-                    <div class="function-grid">
-                        <div class="function-card" onclick="showModule('vehicle')">
-                            <i class="fas fa-car"></i>
-                            <h3>车辆状态</h3>
-                            <p>实时监控车辆信息</p>
+                    <div class="main-content-wrapper">
+                        <!-- 个性化设置模块 -->
+                        <div class="personalization">
+                            <h3>个性化</h3>
+                            <div class="personalization-item">
+                                <span>自动模式</span>
+                                <div class="personalization-toggle active" onclick="togglePersonalization('auto')"></div>
+                            </div>
+                            <div class="personalization-item">
+                                <span>夜间模式</span>
+                                <div class="personalization-toggle" onclick="togglePersonalization('night')"></div>
+                            </div>
+                            <div class="personalization-item">
+                                <span>节能模式</span>
+                                <div class="personalization-toggle" onclick="togglePersonalization('eco')"></div>
+                            </div>
                         </div>
-                        <div class="function-card" onclick="showModule('ac')">
-                            <i class="fas fa-snowflake"></i>
-                            <h3>空调控制</h3>
-                            <p>智能温控系统</p>
+
+                        <div class="function-grid">
+                            <div class="function-card" onclick="showModule('vehicle')">
+                                <i class="fas fa-car"></i>
+                                <h3>车辆状态</h3>
+                                <p>实时监控车辆信息</p>
+                            </div>
+                            <div class="function-card" onclick="showModule('ac')">
+                                <i class="fas fa-snowflake"></i>
+                                <h3>空调控制</h3>
+                                <p>智能温控系统</p>
+                            </div>
+                            <div class="function-card" onclick="showModule('media')">
+                                <i class="fas fa-music"></i>
+                                <h3>多媒体</h3>
+                                <p>娱乐系统控制</p>
+                            </div>
+                            <div class="function-card" onclick="showModule('navigation')">
+                                <i class="fas fa-map-marked-alt"></i>
+                                <h3>导航</h3>
+                                <p>智能路线规划</p>
+                            </div>
+                            <div class="function-card" onclick="showModule('apps')">
+                                <i class="fas fa-th"></i>
+                                <h3>车载应用</h3>
+                                <p>应用管理中心</p>
+                            </div>
+                            <div class="function-card" onclick="showModule('settings')">
+                                <i class="fas fa-cog"></i>
+                                <h3>设置</h3>
+                                <p>系统个性化</p>
+                            </div>
                         </div>
-                        <div class="function-card" onclick="showModule('media')">
-                            <i class="fas fa-music"></i>
-                            <h3>多媒体</h3>
-                            <p>娱乐系统控制</p>
-                        </div>
-                        <div class="function-card" onclick="showModule('navigation')">
-                            <i class="fas fa-map-marked-alt"></i>
-                            <h3>导航</h3>
-                            <p>智能路线规划</p>
-                        </div>
-                        <div class="function-card" onclick="showModule('apps')">
-                            <i class="fas fa-th"></i>
-                            <h3>车载应用</h3>
-                            <p>应用管理中心</p>
-                        </div>
-                        <div class="function-card" onclick="showModule('settings')">
-                            <i class="fas fa-cog"></i>
-                            <h3>设置</h3>
-                            <p>系统个性化</p>
+
+                        <!-- 疲劳检测模块 -->
+                        <div class="fatigue-detection">
+                            <div class="fatigue-status">
+                                <i class="fas fa-eye" id="fatigue-icon"></i>
+                                <h3 id="fatigue-title">疲劳检测</h3>
+                                <p id="fatigue-status-text">状态正常</p>
+                            </div>
+                            <div class="fatigue-progress">
+                                <div class="fatigue-bar" id="fatigue-bar"></div>
+                            </div>
+                            <p id="fatigue-level">疲劳度: 15%</p>
                         </div>
                     </div>
 
@@ -74,36 +106,6 @@
                             <i class="fas fa-microphone"></i>
                             <span>语音控制</span>
                         </button>
-                    </div>
-
-                    <!-- 疲劳检测模块 -->
-                    <div class="fatigue-detection">
-                        <div class="fatigue-status">
-                            <i class="fas fa-eye" id="fatigue-icon"></i>
-                            <h3 id="fatigue-title">疲劳检测</h3>
-                            <p id="fatigue-status-text">状态正常</p>
-                        </div>
-                        <div class="fatigue-progress">
-                            <div class="fatigue-bar" id="fatigue-bar"></div>
-                        </div>
-                        <p id="fatigue-level">疲劳度: 15%</p>
-                    </div>
-
-                    <!-- 个性化设置模块 -->
-                    <div class="personalization">
-                        <h3>个性化</h3>
-                        <div class="personalization-item">
-                            <span>自动模式</span>
-                            <div class="personalization-toggle active" onclick="togglePersonalization('auto')"></div>
-                        </div>
-                        <div class="personalization-item">
-                            <span>夜间模式</span>
-                            <div class="personalization-toggle" onclick="togglePersonalization('night')"></div>
-                        </div>
-                        <div class="personalization-item">
-                            <span>节能模式</span>
-                            <div class="personalization-toggle" onclick="togglePersonalization('eco')"></div>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -243,9 +245,6 @@
         <!-- 车辆状态模块 -->
         <div class="module" id="vehicle-module">
             <div class="module-header">
-                <button class="back-btn" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
                 <h2>车辆状态</h2>
             </div>
             <div class="vehicle-status-grid">
@@ -280,14 +279,16 @@
                     <p id="vehicle-odometer">12,500 km</p>
                 </div>
             </div>
+            <div class="module-footer">
+                <button class="back-btn-footer" onclick="showMainInterface()">
+                    <i class="fas fa-arrow-left"></i> 返回
+                </button>
+            </div>
         </div>
 
         <!-- 空调控制模块 -->
         <div class="module" id="ac-module">
             <div class="module-header">
-                <button class="back-btn" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
                 <h2>空调控制</h2>
             </div>
             <div class="ac-controls">
@@ -329,14 +330,16 @@
                     </div>
                 </div>
             </div>
+            <div class="module-footer">
+                <button class="back-btn-footer" onclick="showMainInterface()">
+                    <i class="fas fa-arrow-left"></i> 返回
+                </button>
+            </div>
         </div>
 
         <!-- 多媒体模块 -->
         <div class="module" id="media-module">
             <div class="module-header">
-                <button class="back-btn" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
                 <h2>多媒体娱乐</h2>
             </div>
             <div class="media-player">
@@ -371,14 +374,16 @@
                     <button class="source-btn" onclick="changeSource('usb')">USB</button>
                 </div>
             </div>
+            <div class="module-footer">
+                <button class="back-btn-footer" onclick="showMainInterface()">
+                    <i class="fas fa-arrow-left"></i> 返回
+                </button>
+            </div>
         </div>
 
         <!-- 导航模块 -->
         <div class="module" id="navigation-module">
             <div class="module-header">
-                <button class="back-btn" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
                 <h2>导航</h2>
             </div>
             <div class="navigation-content">
@@ -405,14 +410,16 @@
                     <p>地图显示区域</p>
                 </div>
             </div>
+            <div class="module-footer">
+                <button class="back-btn-footer" onclick="showMainInterface()">
+                    <i class="fas fa-arrow-left"></i> 返回
+                </button>
+            </div>
         </div>
 
         <!-- 车载应用模块 -->
         <div class="module" id="apps-module">
             <div class="module-header">
-                <button class="back-btn" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
                 <h2>车载应用</h2>
             </div>
             <div class="apps-grid">
@@ -441,14 +448,16 @@
                     <h3>游戏</h3>
                 </div>
             </div>
+            <div class="module-footer">
+                <button class="back-btn-footer" onclick="showMainInterface()">
+                    <i class="fas fa-arrow-left"></i> 返回
+                </button>
+            </div>
         </div>
 
         <!-- 设置模块 -->
         <div class="module" id="settings-module">
             <div class="module-header">
-                <button class="back-btn" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
                 <h2>系统设置</h2>
             </div>
             <div class="settings-content">
@@ -489,6 +498,11 @@
                         <button class="toggle-btn">开启</button>
                     </div>
                 </div>
+            </div>
+            <div class="module-footer">
+                <button class="back-btn-footer" onclick="showMainInterface()">
+                    <i class="fas fa-arrow-left"></i> 返回
+                </button>
             </div>
         </div>
 
