@@ -17,6 +17,9 @@ let currentX = 0;
 let currentY = 0;
 let isDragging = false;
 
+let mediaRecorder;
+let audioChunks = [];
+
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     updateTime();
@@ -30,6 +33,16 @@ document.addEventListener('DOMContentLoaded', function() {
     initFatigueDetection();
     initTouchEvents();
     updatePersonalizationDisplay();
+
+    const voiceBtn = document.getElementById('voice-btn');
+    const stopBtn = document.getElementById('stop-recording-btn');
+
+    if (voiceBtn) {
+        voiceBtn.addEventListener('click', startRecording);
+    }
+    if(stopBtn) {
+        stopBtn.addEventListener('click', stopRecording);
+    }
 });
 
 // 初始化触摸事件
@@ -315,57 +328,102 @@ function updatePersonalizationDisplay() {
 }
 
 // 语音控制切换
-function toggleVoiceControl() {
-    const voiceBtn = document.getElementById('voice-btn');
+function updateVoiceStatus(text, showStopButton) {
     const voiceStatus = document.getElementById('voice-status');
-    const voiceIndicator = document.getElementById('voice-indicator');
-    
-    if (!voiceListening) {
-        // 开始语音监听
-        startVoiceListening();
-        voiceBtn.classList.add('active');
+    const voiceStatusText = document.getElementById('voice-status-text');
+    const voiceBtn = document.getElementById('voice-btn');
+    const stopBtn = document.getElementById('stop-recording-btn');
+
+    if (text) {
         voiceStatus.classList.add('active');
-        voiceIndicator.classList.add('active');
-        voiceListening = true;
+        voiceBtn.classList.add('hidden'); // 隐藏主按钮
+        voiceStatusText.textContent = text;
     } else {
-        // 停止语音监听
-        stopVoiceListening();
-        voiceBtn.classList.remove('active');
         voiceStatus.classList.remove('active');
-        voiceIndicator.classList.remove('active');
-        voiceListening = false;
+        voiceBtn.classList.remove('hidden'); // 显示主按钮
+    }
+
+    if (showStopButton) {
+        stopBtn.classList.add('visible');
+    } else {
+        stopBtn.classList.remove('visible');
     }
 }
 
-// 开始语音监听
-async function startVoiceListening() {
+async function startRecording() {
+    if (mediaRecorder && mediaRecorder.state === 'recording') return;
+    
     try {
-        const response = await fetch('/api/voice/listen', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        const data = await response.json();
-        console.log('语音监听开始:', data.message);
-    } catch (error) {
-        console.error('语音监听启动失败:', error);
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        
+        mediaRecorder.ondataavailable = event => {
+            audioChunks.push(event.data);
+        };
+        
+        mediaRecorder.onstop = uploadAudio;
+        
+        audioChunks = [];
+        mediaRecorder.start();
+        voiceListening = true;
+        updateVoiceStatus('正在聆听...', true);
+    } catch (err) {
+        console.error("无法获取麦克风:", err);
+        updateVoiceStatus('无法访问麦克风', false);
+        setTimeout(() => updateVoiceStatus(null, false), 2000);
     }
 }
 
-// 停止语音监听
-async function stopVoiceListening() {
+function stopRecording() {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        return;
+    }
+    mediaRecorder.stop();
+    // 停止所有媒体流轨道，这会关闭麦克风并移除浏览器标签上的红点
+    if (mediaRecorder.stream) {
+        mediaRecorder.stream.getTracks().forEach(track => track.stop());
+    }
+    voiceListening = false;
+    updateVoiceStatus('正在识别...', false);
+}
+
+async function uploadAudio() {
+    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+    const formData = new FormData();
+    formData.append('audio_data', audioBlob);
+
+    updateVoiceStatus('正在处理...', false);
+
     try {
-        const response = await fetch('/api/voice/stop', {
+        const response = await fetch('/api/voice/recognize', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
+            body: formData
         });
-        const data = await response.json();
-        console.log('语音监听停止:', data.message);
+
+        if (!response.ok) {
+            throw new Error(`服务器错误: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            updateVoiceStatus('操作成功', false);
+            if (result.ac_status) {
+                updateACStatusDisplay(result.ac_status);
+            }
+        } else {
+            throw new Error(result.error || '未知错误');
+        }
+
     } catch (error) {
-        console.error('语音监听停止失败:', error);
+        console.error('语音处理失败:', error);
+        updateVoiceStatus('操作失败', false);
+    } finally {
+        setTimeout(() => {
+            if (!voiceListening) {
+                updateVoiceStatus(null, false);
+            }
+        }, 2000);
     }
 }
 
@@ -781,34 +839,12 @@ async function disableAutopilot() {
     }
 }
 
-// 键盘快捷键支持
-document.addEventListener('keydown', function(event) {
-    // ESC键返回主界面
-    if (event.key === 'Escape') {
-        showMainInterface();
-    }
-    
-    // 空格键切换语音控制
-    if (event.key === ' ') {
-        event.preventDefault();
-        toggleVoiceControl();
-    }
-    
-    // 左右箭头键切换页面
-    if (event.key === 'ArrowLeft') {
-        goToPage(Math.max(currentPage - 1, 0));
-    }
+// 按键控制
+document.addEventListener('keyup', (event) => {
     if (event.key === 'ArrowRight') {
-        goToPage(Math.min(currentPage + 1, 2));
-    }
-    
-    // 数字键快速访问功能
-    if (event.key >= '1' && event.key <= '6') {
-        const modules = ['vehicle', 'ac', 'media', 'navigation', 'apps', 'settings'];
-        const moduleIndex = parseInt(event.key) - 1;
-        if (moduleIndex < modules.length) {
-            showModule(modules[moduleIndex]);
-        }
+        goToPage((currentPage + 1) % 3);
+    } else if (event.key === 'ArrowLeft') {
+        goToPage((currentPage - 1 + 3) % 3);
     }
 });
 
