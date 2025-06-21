@@ -1,865 +1,383 @@
-// 全局变量
-let currentModule = 'main';
-let voiceListening = false;
-let autopilotEnabled = false;
-let currentPage = 0;
-let fatigueLevel = 15;
-let personalizationSettings = {
-    auto: true,
-    night: false,
-    eco: false
-};
+document.addEventListener('DOMContentLoaded', () => {
+    // =======================================================================
+    // ============================ GLOABL STATE & VARS ======================
+    // =======================================================================
+    let driverTemp = 22.5;
+    let passengerTemp = 22.5;
+    let map = null; // To hold the map instance
+    let driving = null; // To hold the driving route instance
+    let geolocation = null; // To hold the geolocation instance
 
-// 触摸相关变量
-let startX = 0;
-let startY = 0;
-let currentX = 0;
-let currentY = 0;
-let isDragging = false;
-
-let mediaRecorder;
-let audioChunks = [];
-
-// 页面加载完成后初始化
-document.addEventListener('DOMContentLoaded', function() {
-    updateTime();
-    setInterval(updateTime, 1000);
-    loadVehicleStatus();
-    loadACStatus();
-    loadMediaStatus();
-    loadNavigationStatus();
-    loadAutopilotStatus();
-    loadVoiceStatus();
-    initFatigueDetection();
-    initTouchEvents();
-    updatePersonalizationDisplay();
-
-    const voiceBtn = document.getElementById('voice-btn');
-    const stopBtn = document.getElementById('stop-recording-btn');
-
-    if (voiceBtn) {
-        voiceBtn.addEventListener('click', startRecording);
-    }
-    if(stopBtn) {
-        stopBtn.addEventListener('click', stopRecording);
-    }
-});
-
-// 初始化触摸事件
-function initTouchEvents() {
-    const container = document.getElementById('main-container');
-    
-    container.addEventListener('touchstart', handleTouchStart, false);
-    container.addEventListener('touchmove', handleTouchMove, false);
-    container.addEventListener('touchend', handleTouchEnd, false);
-    
-    // 鼠标事件支持
-    container.addEventListener('mousedown', handleMouseDown, false);
-    container.addEventListener('mousemove', handleMouseMove, false);
-    container.addEventListener('mouseup', handleMouseUp, false);
-    container.addEventListener('mouseleave', handleMouseUp, false);
-}
-
-// 触摸开始
-function handleTouchStart(e) {
-    if (e.touches.length === 1) {
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        isDragging = true;
-    }
-}
-
-// 触摸移动
-function handleTouchMove(e) {
-    if (!isDragging) return;
-    
-    e.preventDefault();
-    currentX = e.touches[0].clientX;
-    currentY = e.touches[0].clientY;
-}
-
-// 触摸结束
-function handleTouchEnd(e) {
-    if (!isDragging) return;
-    
-    isDragging = false;
-    const deltaX = startX - currentX;
-    const deltaY = startY - currentY;
-    
-    // 确保是水平滑动
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-        if (deltaX > 0) {
-            // 向左滑动
-            goToPage(Math.min(currentPage + 1, 2));
-        } else {
-            // 向右滑动
-            goToPage(Math.max(currentPage - 1, 0));
-        }
-    }
-}
-
-// 鼠标按下
-function handleMouseDown(e) {
-    startX = e.clientX;
-    startY = e.clientY;
-    isDragging = true;
-}
-
-// 鼠标移动
-function handleMouseMove(e) {
-    if (!isDragging) return;
-    currentX = e.clientX;
-    currentY = e.clientY;
-}
-
-// 鼠标释放
-function handleMouseUp(e) {
-    if (!isDragging) return;
-    
-    isDragging = false;
-    const deltaX = startX - currentX;
-    const deltaY = startY - currentY;
-    
-    // 确保是水平滑动
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
-        if (deltaX > 0) {
-            // 向左滑动
-            goToPage(Math.min(currentPage + 1, 2));
-        } else {
-            // 向右滑动
-            goToPage(Math.max(currentPage - 1, 0));
-        }
-    }
-}
-
-// 跳转到指定页面
-function goToPage(pageIndex) {
-    const container = document.getElementById('main-container');
-    const dots = document.querySelectorAll('.swipe-dot');
-    
-    currentPage = pageIndex;
-    
-    // 更新容器位置
-    if (pageIndex === 0) {
-        container.classList.remove('slide-left', 'slide-right');
-    } else if (pageIndex === 1) {
-        container.classList.add('slide-left');
-        container.classList.remove('slide-right');
-    } else if (pageIndex === 2) {
-        container.classList.add('slide-right');
-        container.classList.remove('slide-left');
-    }
-    
-    // 更新指示器
-    dots.forEach((dot, index) => {
-        if (index === pageIndex) {
-            dot.classList.add('active');
-        } else {
-            dot.classList.remove('active');
-        }
-    });
-}
-
-// 更新时间显示
-function updateTime() {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString('zh-CN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-    });
-    document.getElementById('current-time').textContent = timeString;
-}
-
-// 显示模块
-function showModule(moduleName) {
-    const swipeIndicator = document.querySelector('.swipe-indicator');
-    if (swipeIndicator) swipeIndicator.style.display = 'none';
-
-    // 隐藏所有模块
+    // =======================================================================
+    // ============================ DOM Elements =============================
+    // =======================================================================
+    const mainContent = document.querySelector('.new-main-content');
+    const appDrawer = document.getElementById('app-drawer');
     const modules = document.querySelectorAll('.module');
-    modules.forEach(module => {
-        module.classList.remove('active');
-    });
-    
-    // 隐藏主界面
-    document.getElementById('main-container').style.display = 'none';
-    
-    // 显示指定模块
-    const targetModule = document.getElementById(moduleName + '-module');
-    if (targetModule) {
-        targetModule.classList.add('active');
-        currentModule = moduleName;
-    }
-}
 
-// 返回主界面
-function showMainInterface() {
-    const swipeIndicator = document.querySelector('.swipe-indicator');
-    if (swipeIndicator) swipeIndicator.style.display = 'flex';
+    // --- View Switching Buttons ---
+    const appDockIcon = document.getElementById('app-dock-icon');
+    const functionCards = document.querySelectorAll('.function-card');
+    const closeModuleBtns = document.querySelectorAll('.close-module-btn');
+    const acDockButton = document.getElementById('ac-dock-button');
+    const settingsDockButton = document.getElementById('settings-dock-button');
+    const mapDockButton = document.getElementById('map-dock-button');
+    const mediaDockWidget = document.getElementById('media-dock-widget');
+    
+    // --- Time/Date Displays ---
+    const smallTimeDisplay = document.getElementById('small-time-display');
+    const largeTimeDisplay = document.getElementById('large-time-display');
 
-    // 隐藏所有模块
-    const modules = document.querySelectorAll('.module');
-    modules.forEach(module => {
-        module.classList.remove('active');
-    });
-    
-    // 显示主界面
-    document.getElementById('main-container').style.display = 'flex';
-    currentModule = 'main';
-}
+    // --- Dock Temperature Controls ---
+    const driverTempDisplayDock = document.getElementById('driver-temp-display-dock');
+    const driverTempUpDock = document.getElementById('driver-temp-up-dock');
+    const driverTempDownDock = document.getElementById('driver-temp-down-dock');
+    const passengerTempDisplayDock = document.getElementById('passenger-temp-display-dock');
+    const passengerTempUpDock = document.getElementById('passenger-temp-up-dock');
+    const passengerTempDownDock = document.getElementById('passenger-temp-down-dock');
 
-// 快捷操作
-function quickAction(action) {
-    console.log('快捷操作:', action);
-    
-    switch(action) {
-        case 'phone':
-            alert('启动电话功能');
-            break;
-        case 'message':
-            alert('打开消息应用');
-            break;
-        case 'camera':
-            alert('启动环视摄像头');
-            break;
-        case 'weather':
-            alert('显示天气信息');
-            break;
-        case 'calendar':
-            alert('打开日程管理');
-            break;
-        case 'emergency':
-            alert('紧急求助已激活');
-            break;
-    }
-}
+    // --- A/C Module Temperature Controls ---
+    const acDriverTempDisplay = document.getElementById('ac-driver-temp-display');
+    const acDriverTempUp = document.getElementById('ac-driver-temp-up');
+    const acDriverTempDown = document.getElementById('ac-driver-temp-down');
+    const acPassengerTempDisplay = document.getElementById('ac-passenger-temp-display');
+    const acPassengerTempUp = document.getElementById('ac-passenger-temp-up');
+    const acPassengerTempDown = document.getElementById('ac-passenger-temp-down');
 
-// 设置驾驶模式
-function setDrivingMode(mode) {
-    const buttons = document.querySelectorAll('.mode-selector .mode-btn');
-    buttons.forEach(btn => btn.classList.remove('active'));
+    // --- Map Search Input and Button ---
+    const mapSearchInput = document.getElementById('map-search-input');
+    const mapSearchButton = document.getElementById('map-search-button');
+    const mapPanel = document.getElementById('map-panel');
     
-    const activeBtn = document.querySelector(`[onclick="setDrivingMode('${mode}')"]`);
-    if (activeBtn) activeBtn.classList.add('active');
-    
-    console.log('驾驶模式切换为:', mode);
-}
+    // --- Weather display ---
+    const weatherIcon = document.getElementById('weather-icon');
+    const weatherDisplay = document.getElementById('weather-display');
 
-// 初始化疲劳检测
-function initFatigueDetection() {
-    updateFatigueDisplay();
-    // 模拟疲劳度变化
-    setInterval(() => {
-        fatigueLevel += Math.random() * 2 - 1; // 随机增减
-        fatigueLevel = Math.max(0, Math.min(100, fatigueLevel));
-        updateFatigueDisplay();
-    }, 3000);
-}
+    // =======================================================================
+    // ======================== UI Switching Logic (UNIFIED) =================
+    // =======================================================================
 
-// 更新疲劳检测显示
-function updateFatigueDisplay() {
-    const fatigueBar = document.getElementById('fatigue-bar');
-    const fatigueLevelText = document.getElementById('fatigue-level');
-    const fatigueStatusText = document.getElementById('fatigue-status-text');
-    const fatigueIcon = document.getElementById('fatigue-icon');
-    const fatigueIndicator = document.getElementById('fatigue-indicator');
-    
-    // 更新进度条
-    fatigueBar.style.width = fatigueLevel + '%';
-    
-    // 更新文本
-    fatigueLevelText.textContent = `疲劳度: ${Math.round(fatigueLevel)}%`;
-    
-    // 根据疲劳度更新状态
-    if (fatigueLevel < 30) {
-        fatigueStatusText.textContent = '状态正常';
-        fatigueIcon.className = 'fas fa-eye';
-        fatigueIndicator.classList.remove('active');
-    } else if (fatigueLevel < 60) {
-        fatigueStatusText.textContent = '轻度疲劳';
-        fatigueIcon.className = 'fas fa-eye-slash';
-        fatigueIndicator.classList.add('active');
-    } else {
-        fatigueStatusText.textContent = '严重疲劳';
-        fatigueIcon.className = 'fas fa-exclamation-triangle';
-        fatigueIndicator.classList.add('active');
-        // 发出警告
-        if (fatigueLevel > 80) {
-            alert('警告：检测到严重疲劳，建议立即休息！');
+    function showView(viewId) {
+        // Hide all major views first
+        mainContent.style.display = 'none';
+        appDrawer.style.display = 'none';
+        modules.forEach(m => m.style.display = 'none');
+
+        const viewToShow = document.getElementById(viewId);
+        if (viewToShow) {
+            const displayStyle = viewId === 'app-drawer' ? 'grid' : 'flex';
+            viewToShow.style.display = displayStyle;
+            
+            if (viewId === 'map-module') {
+                initMap();
+            }
+        } else {
+            mainContent.style.display = 'flex';
         }
     }
-}
 
-// 切换个性化设置
-function togglePersonalization(setting) {
-    personalizationSettings[setting] = !personalizationSettings[setting];
-    updatePersonalizationDisplay();
+    // --- Event Listener Binding ---
+    appDockIcon.addEventListener('click', () => showView('app-drawer'));
     
-    // 应用设置
-    switch(setting) {
-        case 'auto':
-            console.log('自动模式:', personalizationSettings.auto ? '开启' : '关闭');
-            break;
-        case 'night':
-            console.log('夜间模式:', personalizationSettings.night ? '开启' : '关闭');
-            if (personalizationSettings.night) {
-                document.body.style.filter = 'brightness(0.8)';
+    closeModuleBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const targetViewId = btn.getAttribute('data-target');
+            showView(targetViewId || 'main-content');
+        });
+    });
+
+    functionCards.forEach(card => {
+        card.addEventListener('click', () => {
+            const targetViewId = card.getAttribute('data-target');
+            if (targetViewId) showView(targetViewId);
+        });
+    });
+
+    // --- Unify Dock Buttons to use the same showView logic ---
+    if (acDockButton) acDockButton.addEventListener('click', () => showView('ac-module'));
+    if (settingsDockButton) settingsDockButton.addEventListener('click', () => showView('settings-module'));
+    if (mapDockButton) mapDockButton.addEventListener('click', () => showView('map-module'));
+    if (mediaDockWidget) mediaDockWidget.addEventListener('click', () => showView('media-module'));
+
+    // =======================================================================
+    // ======================== MAP & NAVIGATION LOGIC =======================
+    // =======================================================================
+
+    async function initMap() {
+        if (map) return;
+
+        try {
+            const response = await fetch('/api/config');
+            if (!response.ok) throw new Error('Network response was not ok');
+            const config = await response.json();
+
+            if (!config.amap_key || !config.amap_security_secret) {
+                console.error("高德Key或安全密钥未能在后端正确加载！");
+                document.getElementById('amap-container').innerHTML = '<div style="color:red; text-align:center; padding-top: 50px;">地图加载失败：缺少API配置。</div>';
+                return;
+            }
+
+            window._AMapSecurityConfig = {
+                securityJsCode: config.amap_security_secret,
+            };
+
+            AMapLoader.load({
+                "key": config.amap_key,
+                "version": "2.0",
+                "plugins": ['AMap.ToolBar', 'AMap.Scale', 'AMap.Geolocation', 'AMap.Driving', 'AMap.PlaceSearch'],
+            }).then((AMap) => {
+                map = new AMap.Map("amap-container", {
+                    zoom: 11,
+                    viewMode: '3D',
+                    pitch: 50,
+                    center: [116.397428, 39.90923],
+                });
+                
+                map.addControl(new AMap.ToolBar({position: 'LB', offset: [20, 20]}));
+                map.addControl(new AMap.Scale({position: 'LB', offset: [80, 20]}));
+                
+                // Initialize Geolocation plugin ONCE and store it
+                geolocation = new AMap.Geolocation({
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    buttonPosition: 'RB',
+                    buttonOffset: new AMap.Pixel(10, 20),
+                    zoomToAccuracy: true,
+                });
+                map.addControl(geolocation);
+
+                console.log("高德地图及定位插件初始化成功！");
+
+                if(mapSearchButton) mapSearchButton.addEventListener('click', searchAndNavigate);
+                if(mapSearchInput) mapSearchInput.addEventListener('keyup', (event) => {
+                    if (event.key === 'Enter') {
+                        searchAndNavigate();
+                    }
+                });
+
+            }).catch(e => {
+                console.error("地图资源加载失败:", e);
+                 document.getElementById('amap-container').innerHTML = `<div style="color:red; text-align:center; padding-top: 50px;">地图资源加载失败: ${e.message}</div>`;
+            });
+
+        } catch (error) {
+            console.error('获取地图配置或初始化失败:', error);
+            document.getElementById('amap-container').innerHTML = `<div style="color:red; text-align:center; padding-top: 50px;">获取地图配置失败: ${error.message}</div>`;
+        }
+    }
+
+    function searchAndNavigate() {
+        const address = mapSearchInput.value;
+        if (!address) {
+            console.log("请输入目的地");
+            return;
+        }
+        if (!map || !geolocation) {
+            console.error("地图或定位功能尚未初始化！");
+            alert("地图服务正在初始化，请稍后再试。");
+            return;
+        }
+
+        if (driving) driving.clear();
+        mapPanel.innerHTML = ""; 
+
+        // 1. Use the single, pre-initialized geolocation instance
+        geolocation.getCurrentPosition((status, result) => {
+            if (status === 'complete') {
+                const startPoint = result.position;
+                
+                const placeSearch = new AMap.PlaceSearch();
+                placeSearch.search(address, (searchStatus, searchResult) => {
+                    if (searchStatus === 'complete' && searchResult.poiList.pois.length > 0) {
+                        const endPoint = searchResult.poiList.pois[0].location;
+                        
+                        driving = new AMap.Driving({
+                            map: map,
+                            panel: "map-panel",
+                            policy: AMap.DrivingPolicy.LEAST_TIME, 
+                            autoFitView: true
+                        });
+                        
+                        driving.search(startPoint, endPoint, (drivingStatus, drivingResult) => {
+                            if (drivingStatus === 'complete') {
+                                console.log('成功获取驾车方案列表');
+                            } else {
+                                console.error('获取驾车方案失败：' + drivingResult);
+                                mapPanel.innerHTML = `<div style="padding: 20px; color: #ff8a8a;">获取驾车方案失败，请稍后重试。</div>`;
+                            }
+                        });
+
+                    } else {
+                        console.error('搜索目的地失败：' + searchResult);
+                        mapPanel.innerHTML = `<div style="padding: 20px; color: #ff8a8a;">未能找到目的地："${address}"。</div>`;
+                    }
+                });
+
             } else {
-                document.body.style.filter = 'none';
+                console.error('获取当前位置失败: ' + result.message);
+                alert('定位失败: ' + result.message + '\n\n请按照提示检查您的浏览器或操作系统的定位权限。');
             }
-            break;
-        case 'eco':
-            console.log('节能模式:', personalizationSettings.eco ? '开启' : '关闭');
-            break;
-    }
-}
-
-// 更新个性化设置显示
-function updatePersonalizationDisplay() {
-    Object.keys(personalizationSettings).forEach(setting => {
-        const toggle = document.querySelector(`[onclick="togglePersonalization('${setting}')"]`);
-        if (personalizationSettings[setting]) {
-            toggle.classList.add('active');
-        } else {
-            toggle.classList.remove('active');
-        }
-    });
-}
-
-// 语音控制切换
-function updateVoiceStatus(text, showStopButton) {
-    const voiceStatus = document.getElementById('voice-status');
-    const voiceStatusText = document.getElementById('voice-status-text');
-    const voiceBtn = document.getElementById('voice-btn');
-    const stopBtn = document.getElementById('stop-recording-btn');
-
-    if (text) {
-        voiceStatus.classList.add('active');
-        voiceBtn.classList.add('hidden'); // 隐藏主按钮
-        voiceStatusText.textContent = text;
-    } else {
-        voiceStatus.classList.remove('active');
-        voiceBtn.classList.remove('hidden'); // 显示主按钮
-    }
-
-    if (showStopButton) {
-        stopBtn.classList.add('visible');
-    } else {
-        stopBtn.classList.remove('visible');
-    }
-}
-
-async function startRecording() {
-    if (mediaRecorder && mediaRecorder.state === 'recording') return;
-    
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
-        
-        mediaRecorder.ondataavailable = event => {
-            audioChunks.push(event.data);
-        };
-        
-        mediaRecorder.onstop = uploadAudio;
-        
-        audioChunks = [];
-        mediaRecorder.start();
-        voiceListening = true;
-        updateVoiceStatus('正在聆听...', true);
-    } catch (err) {
-        console.error("无法获取麦克风:", err);
-        updateVoiceStatus('无法访问麦克风', false);
-        setTimeout(() => updateVoiceStatus(null, false), 2000);
-    }
-}
-
-function stopRecording() {
-    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-        return;
-    }
-    mediaRecorder.stop();
-    // 停止所有媒体流轨道，这会关闭麦克风并移除浏览器标签上的红点
-    if (mediaRecorder.stream) {
-        mediaRecorder.stream.getTracks().forEach(track => track.stop());
-    }
-    voiceListening = false;
-    updateVoiceStatus('正在识别...', false);
-}
-
-async function uploadAudio() {
-    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-    const formData = new FormData();
-    formData.append('audio_data', audioBlob);
-
-    updateVoiceStatus('正在处理...', false);
-
-    try {
-        const response = await fetch('/api/voice/recognize', {
-            method: 'POST',
-            body: formData
         });
+    }
 
-        if (!response.ok) {
-            throw new Error(`服务器错误: ${response.statusText}`);
+    // =======================================================================
+    // ====================== TEMPERATURE SYNC LOGIC =========================
+    // =======================================================================
+
+    function updateAllTempDisplays() {
+        // Update Dock displays
+        if (driverTempDisplayDock) driverTempDisplayDock.textContent = `${driverTemp.toFixed(1)}°`;
+        if (passengerTempDisplayDock) passengerTempDisplayDock.textContent = `${passengerTemp.toFixed(1)}°`;
+
+        // Update AC module displays
+        if (acDriverTempDisplay) acDriverTempDisplay.textContent = driverTemp.toFixed(1);
+        if (acPassengerTempDisplay) acPassengerTempDisplay.textContent = passengerTemp.toFixed(1);
+    }
+    
+    function changeTemp(zone, direction) {
+        const step = 0.5;
+        const minTemp = 16;
+        const maxTemp = 30;
+
+        if (zone === 'driver') {
+            driverTemp += direction * step;
+            driverTemp = Math.max(minTemp, Math.min(maxTemp, driverTemp));
+        } else if (zone === 'passenger') {
+            passengerTemp += direction * step;
+            passengerTemp = Math.max(minTemp, Math.min(maxTemp, passengerTemp));
         }
+        updateAllTempDisplays();
+    }
 
-        const result = await response.json();
+    // --- Event Listeners for All Temperature Buttons ---
+    if(driverTempUpDock) driverTempUpDock.addEventListener('click', (e) => { e.stopPropagation(); changeTemp('driver', 1); });
+    if(driverTempDownDock) driverTempDownDock.addEventListener('click', (e) => { e.stopPropagation(); changeTemp('driver', -1); });
+    if(passengerTempUpDock) passengerTempUpDock.addEventListener('click', (e) => { e.stopPropagation(); changeTemp('passenger', 1); });
+    if(passengerTempDownDock) passengerTempDownDock.addEventListener('click', (e) => { e.stopPropagation(); changeTemp('passenger', -1); });
 
-        if (result.status === 'success') {
-            updateVoiceStatus('操作成功', false);
-            if (result.ac_status) {
-                updateACStatusDisplay(result.ac_status);
+    if(acDriverTempUp) acDriverTempUp.addEventListener('click', () => changeTemp('driver', 1));
+    if(acDriverTempDown) acDriverTempDown.addEventListener('click', () => changeTemp('driver', -1));
+    if(acPassengerTempUp) acPassengerTempUp.addEventListener('click', () => changeTemp('passenger', 1));
+    if(acPassengerTempDown) acPassengerTempDown.addEventListener('click', () => changeTemp('passenger', -1));
+
+
+    // =======================================================================
+    // =========================== UI HELPERS ================================
+    // =======================================================================
+    function updateTime() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        if (smallTimeDisplay) smallTimeDisplay.textContent = timeString;
+        if (largeTimeDisplay) largeTimeDisplay.textContent = timeString;
+    }
+
+    function formatDate() {
+        const dateLine2 = document.getElementById('large-date-display-line2');
+        const dateLine3 = document.getElementById('large-date-display-line3');
+        if (dateLine2 && dateLine3) {
+            const now = new Date();
+            const day = String(now.getDate()).padStart(2, '0');
+            const month = now.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+            dateLine2.textContent = day;
+            dateLine3.textContent = month;
+        }
+    }
+    
+    // =======================================================================
+    // ============================ WEATHER LOGIC ============================
+    // =======================================================================
+    const weatherIconMap = {
+        // Mapping QWeather icon codes to Font Awesome icons
+        "100": "fas fa-sun", // 晴
+        "101": "fas fa-cloud-sun", // 多云
+        "102": "fas fa-cloud", // 少云
+        "103": "fas fa-cloud", // 晴间多云
+        "104": "fas fa-cloud", // 阴
+        "300": "fas fa-cloud-showers-heavy", // 阵雨
+        "301": "fas fa-cloud-showers-heavy", // 强阵雨
+        "305": "fas fa-cloud-rain", // 小雨
+        "306": "fas fa-cloud-rain", // 中雨
+        "307": "fas fa-cloud-showers-heavy", // 大雨
+        "400": "fas fa-snowflake", // 小雪
+        "401": "fas fa-snowflake", // 中雪
+        "402": "fas fa-snowflake", // 大雪
+        "501": "fas fa-smog", // 雾
+        // Add more mappings as needed
+    };
+
+    function updateWeatherUI(data) {
+        if (!data || !data.temp || !data.text) {
+            weatherDisplay.textContent = '天气未知';
+            weatherIcon.className = 'fas fa-question-circle';
+            return;
+        }
+        weatherDisplay.textContent = `${data.text} ${data.temp}°C`;
+        weatherIcon.className = weatherIconMap[data.icon] || 'fas fa-cloud'; // Default icon
+    }
+
+    async function getWeather(city) {
+        if (!weatherIcon || !weatherDisplay) return;
+        
+        weatherIcon.className = 'fas fa-spinner fa-spin';
+        weatherDisplay.textContent = '加载中...';
+
+        try {
+            const response = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
             }
-        } else {
-            throw new Error(result.error || '未知错误');
+            const weatherData = await response.json();
+            updateWeatherUI(weatherData);
+        } catch (error) {
+            console.error("获取天气失败:", error);
+            weatherDisplay.textContent = "获取失败";
+            weatherIcon.className = 'fas fa-exclamation-triangle';
+        }
+    }
+
+    // =======================================================================
+    // ======================== MOCK VOICE COMMAND HANDLING ==================
+    // =======================================================================
+    /**
+     * Handles function calls returned by the NLU model.
+     * This is where you would integrate the weather function.
+     * @param {Array<object>} toolCalls - The array of tool calls from the API.
+     */
+    function handleToolCalls(toolCalls) {
+        if (!toolCalls || toolCalls.length === 0) {
+            console.log("没有工具调用需要处理。");
+            return;
         }
 
-    } catch (error) {
-        console.error('语音处理失败:', error);
-        updateVoiceStatus('操作失败', false);
-    } finally {
-        setTimeout(() => {
-            if (!voiceListening) {
-                updateVoiceStatus(null, false);
+        for (const call of toolCalls) {
+            const functionName = call.function.name;
+            const args = JSON.parse(call.function.arguments);
+
+            console.log(`执行工具调用: ${functionName}，参数:`, args);
+
+            if (functionName === 'set_weather') {
+                if (args.city) {
+                    getWeather(args.city);
+                } else {
+                    console.error("调用 set_weather 缺少 city 参数");
+                }
             }
-        }, 2000);
-    }
-}
-
-// 加载车辆状态
-async function loadVehicleStatus() {
-    try {
-        const response = await fetch('/api/vehicle/status');
-        const data = await response.json();
-        updateVehicleStatusDisplay(data);
-    } catch (error) {
-        console.error('加载车辆状态失败:', error);
-    }
-}
-
-// 更新车辆状态显示
-function updateVehicleStatusDisplay(status) {
-    document.getElementById('vehicle-speed').textContent = status.speed + ' km/h';
-    document.getElementById('vehicle-fuel').textContent = status.fuel + '%';
-    document.getElementById('vehicle-temp').textContent = status.temperature + '°C';
-    document.getElementById('vehicle-battery').textContent = status.battery + '%';
-    document.getElementById('vehicle-tire').textContent = status.tire_pressure.join('/') + ' PSI';
-    document.getElementById('vehicle-odometer').textContent = status.odometer.toLocaleString() + ' km';
-}
-
-// 加载空调状态
-async function loadACStatus() {
-    try {
-        const response = await fetch('/api/ac/status');
-        const data = await response.json();
-        updateACStatusDisplay(data);
-    } catch (error) {
-        console.error('加载空调状态失败:', error);
-    }
-}
-
-// 更新空调状态显示
-function updateACStatusDisplay(status) {
-    document.getElementById('ac-temperature').textContent = status.temperature + '°C';
-    document.getElementById('ac-fan-speed').textContent = status.fan_speed;
-    
-    // 更新模式按钮状态
-    const modeButtons = document.querySelectorAll('.mode-btn');
-    modeButtons.forEach(btn => btn.classList.remove('active'));
-    const activeModeBtn = document.querySelector(`[onclick="setACMode('${status.mode}')"]`);
-    if (activeModeBtn) activeModeBtn.classList.add('active');
-    
-    // 更新功能按钮状态
-    const defrostBtn = document.querySelector('[onclick="toggleDefrost()"]');
-    const recirculationBtn = document.querySelector('[onclick="toggleRecirculation()"]');
-    
-    if (status.defrost) {
-        defrostBtn.classList.add('active');
-    } else {
-        defrostBtn.classList.remove('active');
-    }
-    
-    if (status.recirculation) {
-        recirculationBtn.classList.add('active');
-    } else {
-        recirculationBtn.classList.remove('active');
-    }
-}
-
-// 调整温度
-async function adjustTemperature(delta) {
-    const currentTemp = parseInt(document.getElementById('ac-temperature').textContent);
-    const newTemp = Math.max(16, Math.min(30, currentTemp + delta));
-    
-    try {
-        const response = await fetch('/api/ac/status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ temperature: newTemp })
-        });
-        const data = await response.json();
-        updateACStatusDisplay(data.data);
-    } catch (error) {
-        console.error('调整温度失败:', error);
-    }
-}
-
-// 调整风速
-async function adjustFanSpeed(delta) {
-    const currentSpeed = parseInt(document.getElementById('ac-fan-speed').textContent);
-    const newSpeed = Math.max(1, Math.min(5, currentSpeed + delta));
-    
-    try {
-        const response = await fetch('/api/ac/status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ fan_speed: newSpeed })
-        });
-        const data = await response.json();
-        updateACStatusDisplay(data.data);
-    } catch (error) {
-        console.error('调整风速失败:', error);
-    }
-}
-
-// 设置空调模式
-async function setACMode(mode) {
-    try {
-        const response = await fetch('/api/ac/status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ mode: mode })
-        });
-        const data = await response.json();
-        updateACStatusDisplay(data.data);
-    } catch (error) {
-        console.error('设置空调模式失败:', error);
-    }
-}
-
-// 切换除霜功能
-async function toggleDefrost() {
-    const defrostBtn = document.querySelector('[onclick="toggleDefrost()"]');
-    const currentState = defrostBtn.classList.contains('active');
-    
-    try {
-        const response = await fetch('/api/ac/status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ defrost: !currentState })
-        });
-        const data = await response.json();
-        updateACStatusDisplay(data.data);
-    } catch (error) {
-        console.error('切换除霜功能失败:', error);
-    }
-}
-
-// 切换内循环功能
-async function toggleRecirculation() {
-    const recirculationBtn = document.querySelector('[onclick="toggleRecirculation()"]');
-    const currentState = recirculationBtn.classList.contains('active');
-    
-    try {
-        const response = await fetch('/api/ac/status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ recirculation: !currentState })
-        });
-        const data = await response.json();
-        updateACStatusDisplay(data.data);
-    } catch (error) {
-        console.error('切换内循环功能失败:', error);
-    }
-}
-
-// 加载多媒体状态
-async function loadMediaStatus() {
-    try {
-        const response = await fetch('/api/media/status');
-        const data = await response.json();
-        updateMediaStatusDisplay(data);
-    } catch (error) {
-        console.error('加载多媒体状态失败:', error);
-    }
-}
-
-// 更新多媒体状态显示
-function updateMediaStatusDisplay(status) {
-    document.getElementById('current-track').textContent = status.current_track;
-    document.getElementById('current-artist').textContent = status.artist;
-    document.getElementById('volume-slider').value = status.volume;
-    
-    const playBtn = document.getElementById('play-btn');
-    if (status.playing) {
-        playBtn.innerHTML = '<i class="fas fa-pause"></i>';
-    } else {
-        playBtn.innerHTML = '<i class="fas fa-play"></i>';
-    }
-    
-    // 更新音源按钮状态
-    const sourceButtons = document.querySelectorAll('.source-btn');
-    sourceButtons.forEach(btn => btn.classList.remove('active'));
-    const activeSourceBtn = document.querySelector(`[onclick="changeSource('${status.source}')"]`);
-    if (activeSourceBtn) activeSourceBtn.classList.add('active');
-}
-
-// 切换播放/暂停
-async function togglePlay() {
-    const playBtn = document.getElementById('play-btn');
-    const isPlaying = playBtn.innerHTML.includes('pause');
-    
-    try {
-        const response = await fetch('/api/media/status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ playing: !isPlaying })
-        });
-        const data = await response.json();
-        updateMediaStatusDisplay(data.data);
-    } catch (error) {
-        console.error('切换播放状态失败:', error);
-    }
-}
-
-// 上一首
-async function previousTrack() {
-    console.log('播放上一首');
-}
-
-// 下一首
-async function nextTrack() {
-    console.log('播放下一首');
-}
-
-// 调整音量
-async function adjustVolume(volume) {
-    try {
-        const response = await fetch('/api/media/status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ volume: parseInt(volume) })
-        });
-        const data = await response.json();
-        updateMediaStatusDisplay(data.data);
-    } catch (error) {
-        console.error('调整音量失败:', error);
-    }
-}
-
-// 切换音源
-async function changeSource(source) {
-    try {
-        const response = await fetch('/api/media/status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ source: source })
-        });
-        const data = await response.json();
-        updateMediaStatusDisplay(data.data);
-    } catch (error) {
-        console.error('切换音源失败:', error);
-    }
-}
-
-// 加载导航状态
-async function loadNavigationStatus() {
-    try {
-        const response = await fetch('/api/navigation/status');
-        const data = await response.json();
-        updateNavigationStatusDisplay(data);
-    } catch (error) {
-        console.error('加载导航状态失败:', error);
-    }
-}
-
-// 更新导航状态显示
-function updateNavigationStatusDisplay(status) {
-    document.getElementById('nav-destination').textContent = status.destination;
-    document.getElementById('nav-eta').textContent = status.eta;
-    document.getElementById('nav-distance').textContent = status.distance;
-}
-
-// 设置目的地
-async function setDestination() {
-    const destination = document.getElementById('destination-input').value;
-    if (!destination.trim()) {
-        alert('请输入目的地');
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/navigation/status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-                destination: destination,
-                eta: '25分钟',
-                distance: '8.5公里'
-            })
-        });
-        const data = await response.json();
-        updateNavigationStatusDisplay(data.data);
-        document.getElementById('destination-input').value = '';
-    } catch (error) {
-        console.error('设置目的地失败:', error);
-    }
-}
-
-// 加载自动驾驶状态
-async function loadAutopilotStatus() {
-    try {
-        const response = await fetch('/api/autopilot/status');
-        const data = await response.json();
-        updateAutopilotStatusDisplay(data);
-    } catch (error) {
-        console.error('加载自动驾驶状态失败:', error);
-    }
-}
-
-// 更新自动驾驶状态显示
-function updateAutopilotStatusDisplay(status) {
-    const autopilotIndicator = document.getElementById('autopilot-indicator');
-    if (status.enabled) {
-        autopilotIndicator.classList.add('active');
-        autopilotEnabled = true;
-    } else {
-        autopilotIndicator.classList.remove('active');
-        autopilotEnabled = false;
-    }
-}
-
-// 加载语音状态
-async function loadVoiceStatus() {
-    try {
-        const response = await fetch('/api/voice/status');
-        const data = await response.json();
-        updateVoiceStatusDisplay(data);
-    } catch (error) {
-        console.error('加载语音状态失败:', error);
-    }
-}
-
-// 更新语音状态显示
-function updateVoiceStatusDisplay(status) {
-    const voiceIndicator = document.getElementById('voice-indicator');
-    if (status.listening) {
-        voiceIndicator.classList.add('active');
-        voiceListening = true;
-    } else {
-        voiceIndicator.classList.remove('active');
-        voiceListening = false;
-    }
-}
-
-// 模拟语音命令处理
-function processVoiceCommand(command) {
-    console.log('处理语音命令:', command);
-    
-    // 简单的语音命令识别
-    if (command.includes('空调') || command.includes('温度')) {
-        if (command.includes('调高') || command.includes('升高')) {
-            adjustTemperature(1);
-        } else if (command.includes('调低') || command.includes('降低')) {
-            adjustTemperature(-1);
-        }
-    } else if (command.includes('音乐') || command.includes('播放')) {
-        if (command.includes('播放') || command.includes('开始')) {
-            togglePlay();
-        } else if (command.includes('暂停') || command.includes('停止')) {
-            togglePlay();
-        }
-    } else if (command.includes('导航')) {
-        showModule('navigation');
-    } else if (command.includes('自动驾驶')) {
-        if (command.includes('开启') || command.includes('启动')) {
-            enableAutopilot();
-        } else if (command.includes('关闭') || command.includes('停止')) {
-            disableAutopilot();
+            // Add other function handlers here, e.g., for AC, music, etc.
         }
     }
-}
 
-// 启用自动驾驶
-async function enableAutopilot() {
-    try {
-        const response = await fetch('/api/autopilot/status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-                enabled: true,
-                status: '运行中'
-            })
-        });
-        const data = await response.json();
-        updateAutopilotStatusDisplay(data.data);
-    } catch (error) {
-        console.error('启用自动驾驶失败:', error);
-    }
-}
+    // =======================================================================
+    // =========================== INITIALIZATION ============================
+    // =======================================================================
+    showView('main-content');
+    updateAllTempDisplays();
 
-// 禁用自动驾驶
-async function disableAutopilot() {
-    try {
-        const response = await fetch('/api/autopilot/status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-                enabled: false,
-                status: '待机'
-            })
-        });
-        const data = await response.json();
-        updateAutopilotStatusDisplay(data.data);
-    } catch (error) {
-        console.error('禁用自动驾驶失败:', error);
-    }
-}
-
-// 按键控制
-document.addEventListener('keyup', (event) => {
-    if (event.key === 'ArrowRight') {
-        goToPage((currentPage + 1) % 3);
-    } else if (event.key === 'ArrowLeft') {
-        goToPage((currentPage - 1 + 3) % 3);
-    }
+    // Start clock and set date
+    updateTime();
+    formatDate();
+    setInterval(updateTime, 1000); // Update time every second
+    
+    // Initial weather fetch
+    getWeather('北京');
 });
-
-// 定期更新数据
-setInterval(() => {
-    if (currentModule === 'vehicle') {
-        loadVehicleStatus();
-    } else if (currentModule === 'ac') {
-        loadACStatus();
-    } else if (currentModule === 'media') {
-        loadMediaStatus();
-    } else if (currentModule === 'navigation') {
-        loadNavigationStatus();
-    }
-    
-    loadAutopilotStatus();
-    loadVoiceStatus();
-}, 5000); // 每5秒更新一次 

@@ -8,516 +8,343 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <!-- 顶部状态栏 -->
-        <div class="status-bar">
-            <div class="time" id="current-time"></div>
-            <div class="status-indicators">
-                <div class="status-indicator" id="voice-indicator">
-                    <i class="fas fa-microphone"></i>
+    <!-- ======================================================================= -->
+    <!-- ======================= NEW MODERN UI CONTAINER ======================= -->
+    <!-- ======================================================================= -->
+    <div id="new-interface-container">
+        <!-- Top Status Bar -->
+        <header class="new-status-bar">
+            <div class="status-bar-left">
+                <div class="user-avatar">
+                    <img src="{{ url_for('static', filename='images/avatar.jpg') }}" alt="User">
                 </div>
-                <div class="status-indicator" id="autopilot-indicator">
-                    <i class="fas fa-car"></i>
+                <div class="status-item range">
+                    <i class="fas fa-battery-full"></i>
+                    <span>468km</span>
                 </div>
-                <div class="status-indicator" id="fatigue-indicator">
-                    <i class="fas fa-eye"></i>
+                <div id="gear-display" class="status-item gear">
+                    <span id="gear-p" class="active">P</span><span id="gear-r">R</span><span id="gear-n">N</span><span id="gear-d">D</span>
+                </div>
+                <div id="lights-display" class="status-item lights">
+                    <i id="light-high-beam" class="fas fa-sun"></i><i id="light-low-beam" class="fas fa-moon"></i>
+                </div>
+            </div>
+            <div class="status-bar-right">
+                <div class="status-item messages"><i class="fas fa-comment-dots"></i></div>
+                <div class="status-item bluetooth"><i class="fab fa-bluetooth-b"></i></div>
+                <div class="status-item signal"><i class="fas fa-signal"></i></div>
+                <div class="status-item weather">
+                    <i id="weather-icon" class="fas fa-spinner fa-spin"></i>
+                    <span id="weather-display">加载中...</span>
+                </div>
+                <div class="status-item time-small"><span id="small-time-display">20:36</span></div>
+            </div>
+        </header>
+
+        <!-- Main Content (Car View) -->
+        <main class="new-main-content">
+            <div class="main-time-date">
+                <h1 id="large-time-display">20:36</h1>
+                <p id="large-date-display-line2"></p>
+                <p id="large-date-display-line3"></p>
+            </div>
+            <div class="car-display"></div>
+        </main>
+
+        <!-- ======================================================================= -->
+        <!-- ================================ DOCK ================================= -->
+        <!-- ======================================================================= -->
+        <div class="new-dock">
+            <div id="driver-temp-control-dock" class="dock-item temp-control driver">
+                <i id="driver-temp-down-dock" class="fas fa-chevron-left"></i>
+                <span id="driver-temp-display-dock">23.5°</span>
+                <i id="driver-temp-up-dock" class="fas fa-chevron-right"></i>
+            </div>
+            <div class="dock-item app-shortcuts">
+                <div id="ac-dock-button" class="app-icon"><i class="fas fa-snowflake"></i></div>
+                <div id="settings-dock-button" class="app-icon"><i class="fas fa-cog"></i></div>
+                <div id="map-dock-button" class="app-icon"><i class="fas fa-map-marked-alt"></i></div>
+                <div class="app-icon"><i class="fas fa-video"></i></div>
+                <div id="app-dock-icon" class="app-icon app-drawer-btn"><i class="fas fa-th-large"></i></div>
+            </div>
+            <div id="media-dock-widget" class="dock-item media-player-widget">
+                 <i class="fab fa-spotify"></i>
+                <span>Dance with You - K</span>
+                <i class="fas fa-step-backward"></i>
+                <i class="fas fa-pause"></i>
+                <i class="fas fa-step-forward"></i>
+            </div>
+            <div id="passenger-temp-control-dock" class="dock-item temp-control passenger">
+                <i id="passenger-temp-down-dock" class="fas fa-chevron-left"></i>
+                <span id="passenger-temp-display-dock">23.5°</span>
+                <i id="passenger-temp-up-dock" class="fas fa-chevron-right"></i>
+            </div>
+        </div>
+
+        <!-- ======================================================================= -->
+        <!-- ======================= MODULES & APP DRAWER (as Overlays) ============ -->
+        <!-- ======================================================================= -->
+        <div class="module-container">
+            <!-- App Drawer -->
+            <div id="app-drawer" class="module-container">
+                <h2>所有应用</h2>
+                <div class="function-card" data-target="status-module">
+                    <i class="fas fa-car-battery"></i>
+                    <span>车辆状态</span>
+                </div>
+                <div class="function-card" data-target="ac-module">
+                    <i class="fas fa-snowflake"></i>
+                    <span>空调控制</span>
+                </div>
+                <div class="function-card" data-target="media-module">
+                    <i class="fas fa-music"></i>
+                    <span>多媒体</span>
+                </div>
+                <div class="function-card" data-target="map-module">
+                    <i class="fas fa-map-marked-alt"></i>
+                    <span>导航</span>
+                </div>
+                <!-- This card will now open the new apps module -->
+                <div class="function-card" data-target="apps-module">
+                    <i class="fas fa-th-large"></i>
+                    <span>车载应用</span>
+                </div>
+                <div class="function-card" data-target="settings-module">
+                    <i class="fas fa-cog"></i>
+                    <span>设置</span>
+                </div>
+                <div class="function-card" data-target="fatigue-module">
+                    <i class="fas fa-heartbeat"></i>
+                    <span>疲劳监测</span>
+                </div>
+                <!-- The close button for the app drawer itself -->
+                <button class="close-module-btn" style="position: absolute; top: 25px; right: 25px; z-index: 101; background: rgba(20,22,28,0.8); border:none; color: white; width: 44px; height: 44px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; backdrop-filter: blur(10px);"><i class="fas fa-times"></i></button>
+            </div>
+
+            <!-- AC Control Module (New Design) -->
+            <div id="ac-module" class="module">
+                <div class="module-header">
+                    <h2>空调</h2>
+                    <button class="close-module-btn"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="module-content ac-content">
+                    <!-- Driver Zone -->
+                    <div class="ac-zone" id="ac-driver-zone">
+                        <div class="ac-main-temp-controls">
+                            <span class="ac-zone-label">驾驶员</span>
+                            <div class="ac-temp-display-wrapper">
+                                <span id="ac-driver-temp-display">22.5</span>
+                                <span class="ac-temp-unit">°C</span>
+                            </div>
+                            <div class="ac-controls">
+                                <button id="ac-driver-temp-up" class="ac-temp-btn"><i class="fas fa-chevron-up"></i></button>
+                                <button id="ac-driver-temp-down" class="ac-temp-btn"><i class="fas fa-chevron-down"></i></button>
+                            </div>
+                        </div>
+                        <div class="ac-sub-controls">
+                            <div class="ac-control-group">
+                                <span class="ac-control-label">风量</span>
+                                <div class="fan-control">
+                                    <button class="sub-ctrl-btn"><i class="fas fa-minus"></i></button>
+                                    <div class="fan-level-indicator">
+                                        <div class="fan-bar"></div><div class="fan-bar"></div><div class="fan-bar active"></div><div class="fan-bar active"></div><div class="fan-bar active"></div>
+                                    </div>
+                                    <button class="sub-ctrl-btn"><i class="fas fa-plus"></i></button>
+                                </div>
+                            </div>
+                            <div class="ac-control-group">
+                                 <span class="ac-control-label">座椅加热</span>
+                                 <button class="sub-ctrl-btn seat-heat-btn"><i class="fas fa-fire"></i></button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Middle Shared Controls -->
+                    <div class="ac-middle-controls">
+                        <button class="middle-ctrl-btn" title="同步温度"><i class="fas fa-link"></i> SYNC</button>
+                        <button class="middle-ctrl-btn" title="空调电源"><i class="fas fa-power-off"></i></button>
+                        <button class="middle-ctrl-btn" title="自动模式"><i class="fas fa-magic"></i> AUTO</button>
+                        <button class="middle-ctrl-btn" title="内外循环"><i class="fas fa-car-side"></i></button>
+                        <button class="middle-ctrl-btn" title="前窗除雾"><i class="fas fa-wind"></i></button>
+                    </div>
+
+                    <!-- Passenger Zone -->
+                    <div class="ac-zone" id="ac-passenger-zone">
+                        <div class="ac-main-temp-controls">
+                            <span class="ac-zone-label">副驾驶</span>
+                            <div class="ac-temp-display-wrapper">
+                                <span id="ac-passenger-temp-display">22.5</span>
+                                <span class="ac-temp-unit">°C</span>
+                            </div>
+                            <div class="ac-controls">
+                                <button id="ac-passenger-temp-up" class="ac-temp-btn"><i class="fas fa-chevron-up"></i></button>
+                                <button id="ac-passenger-temp-down" class="ac-temp-btn"><i class="fas fa-chevron-down"></i></button>
+                            </div>
+                        </div>
+                         <div class="ac-sub-controls">
+                            <div class="ac-control-group">
+                                <span class="ac-control-label">风量</span>
+                                 <div class="fan-control">
+                                    <button class="sub-ctrl-btn"><i class="fas fa-minus"></i></button>
+                                    <div class="fan-level-indicator">
+                                        <div class="fan-bar"></div><div class="fan-bar"></div><div class="fan-bar active"></div><div class="fan-bar active"></div><div class="fan-bar active"></div>
+                                    </div>
+                                    <button class="sub-ctrl-btn"><i class="fas fa-plus"></i></button>
+                                </div>
+                            </div>
+                            <div class="ac-control-group">
+                                 <span class="ac-control-label">座椅加热</span>
+                                 <button class="sub-ctrl-btn seat-heat-btn"><i class="fas fa-fire"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Other Modules (Placeholder Content) -->
+            <div class="module" id="vehicle-module" style="display: none;">
+                <button class="close-module-btn"><i class="fas fa-times"></i></button>
+                <h2>车辆状态</h2><p>内容待添加...</p>
+            </div>
+            <div class="module" id="media-module" style="display: none;">
+                <button class="close-module-btn"><i class="fas fa-times"></i></button>
+                <h2>多媒体</h2><p>内容待添加...</p>
+            </div>
+            <div class="module" id="navigation-module" style="display: none;">
+                <button class="close-module-btn"><i class="fas fa-times"></i></button>
+                <h2>导航</h2><p>内容待添加...</p>
+            </div>
+            <div class="module" id="apps-module" style="display: none;">
+                <button class="close-module-btn"><i class="fas fa-times"></i></button>
+                <h2>车载应用</h2><p>内容待添加...</p>
+            </div>
+            <div class="module" id="settings-module" style="display: none;">
+                <button class="close-module-btn"><i class="fas fa-times"></i></button>
+                <h2>设置</h2><p>内容待添加...</p>
+            </div>
+        </div>
+
+        <!-- ======================================================================= -->
+        <!-- =============================== Map Module ============================== -->
+        <!-- ======================================================================= -->
+        <div id="map-module" class="module" style="background: transparent; padding: 0;">
+            <div id="amap-container" style="width: 100%; height: 100%;"></div>
+            
+            <!-- Navigation UI -->
+            <div class="map-ui-container">
+                <div class="map-search-bar">
+                    <input type="text" id="map-search-input" placeholder="您想去哪里？">
+                    <button id="map-search-button"><i class="fas fa-search"></i></button>
+                </div>
+            </div>
+            <div id="map-panel"></div>
+
+            <!-- This button re-uses the existing close logic but is styled to sit on top of the map -->
+            <button class="close-module-btn" style="position: absolute; top: 25px; right: 25px; z-index: 101; background: rgba(20,22,28,0.8); border:none; color: white; width: 44px; height: 44px; border-radius: 50%; font-size: 1.2rem; cursor: pointer; backdrop-filter: blur(10px);"><i class="fas fa-times"></i></button>
+        </div>
+
+        <!-- ======================================================================= -->
+        <!-- =========================== Media Player Module ========================= -->
+        <!-- ======================================================================= -->
+        <div id="media-module" class="module">
+             <div class="module-header">
+                <h2>播放器</h2>
+                <button class="close-module-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="module-content media-player-content">
+                <div class="album-art-lg">
+                    <img src="{{ url_for('static', filename='images/car_menu.jpg') }}" alt="Album Art">
+                </div>
+                <div class="song-info-lg">
+                    <h2>Dance with You</h2>
+                    <p>K</p>
+                </div>
+                <div class="progress-bar-container">
+                    <span>1:28</span>
+                    <div class="progress-bar">
+                        <div class="progress-bar-inner" style="width: 45%;"></div>
+                    </div>
+                    <span>3:10</span>
+                </div>
+                <div class="main-playback-controls">
+                    <button class="playback-btn"><i class="fas fa-random"></i></button>
+                    <button class="playback-btn"><i class="fas fa-step-backward"></i></button>
+                    <button class="playback-btn play-pause-btn"><i class="fas fa-pause"></i></button>
+                    <button class="playback-btn"><i class="fas fa-step-forward"></i></button>
+                    <button class="playback-btn"><i class="fas fa-redo"></i></button>
                 </div>
             </div>
         </div>
 
-        <!-- 主滑动容器 -->
-        <div class="main-container" id="main-container">
-            <!-- 第一页：主界面 -->
-            <div class="page">
-                <div class="main-interface" id="main-interface">
-                    <div class="welcome-section">
-                        <h1>智能车机系统</h1>
-                        <p>欢迎使用您的智能驾驶助手</p>
-                    </div>
-                    
-                    <div class="main-content-wrapper">
-                        <!-- 个性化设置模块 -->
-                        <div class="personalization">
-                            <h3>个性化</h3>
-                            <div class="personalization-item">
-                                <span>自动模式</span>
-                                <div class="personalization-toggle active" onclick="togglePersonalization('auto')"></div>
-                            </div>
-                            <div class="personalization-item">
-                                <span>夜间模式</span>
-                                <div class="personalization-toggle" onclick="togglePersonalization('night')"></div>
-                            </div>
-                            <div class="personalization-item">
-                                <span>节能模式</span>
-                                <div class="personalization-toggle" onclick="togglePersonalization('eco')"></div>
-                            </div>
-                        </div>
-
-                        <div class="function-grid">
-                            <div class="function-card" onclick="showModule('vehicle')">
-                                <i class="fas fa-car"></i>
-                                <h3>车辆状态</h3>
-                                <p>实时监控车辆信息</p>
-                            </div>
-                            <div class="function-card" onclick="showModule('ac')">
-                                <i class="fas fa-snowflake"></i>
-                                <h3>空调控制</h3>
-                                <p>智能温控系统</p>
-                            </div>
-                            <div class="function-card" onclick="showModule('media')">
-                                <i class="fas fa-music"></i>
-                                <h3>多媒体</h3>
-                                <p>娱乐系统控制</p>
-                            </div>
-                            <div class="function-card" onclick="showModule('navigation')">
-                                <i class="fas fa-map-marked-alt"></i>
-                                <h3>导航</h3>
-                                <p>智能路线规划</p>
-                            </div>
-                            <div class="function-card" onclick="showModule('apps')">
-                                <i class="fas fa-th"></i>
-                                <h3>车载应用</h3>
-                                <p>应用管理中心</p>
-                            </div>
-                            <div class="function-card" onclick="showModule('settings')">
-                                <i class="fas fa-cog"></i>
-                                <h3>设置</h3>
-                                <p>系统个性化</p>
-                            </div>
-                        </div>
-
-                        <!-- 疲劳检测模块 -->
-                        <div class="fatigue-detection">
-                            <div class="fatigue-status">
-                                <i class="fas fa-eye" id="fatigue-icon"></i>
-                                <h3 id="fatigue-title">疲劳检测</h3>
-                                <p id="fatigue-status-text">状态正常</p>
-                            </div>
-                            <div class="fatigue-progress">
-                                <div class="fatigue-bar" id="fatigue-bar"></div>
-                            </div>
-                            <p id="fatigue-level">疲劳度: 15%</p>
-                        </div>
-                    </div>
-
-                    <!-- 语音控制按钮 -->
-                    <div class="voice-control">
-                        <button class="voice-btn" id="voice-btn" onclick="toggleVoiceControl()">
-                            <i class="fas fa-microphone"></i>
-                            <span>语音控制</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 第二页：快捷功能 -->
-            <div class="page">
-                <div class="main-interface">
-                    <div class="welcome-section">
-                        <h1>快捷功能</h1>
-                        <p>常用功能快速访问</p>
-                    </div>
-                    
-                    <div class="function-grid">
-                        <div class="function-card" onclick="quickAction('phone')">
-                            <i class="fas fa-phone"></i>
-                            <h3>电话</h3>
-                            <p>蓝牙通话</p>
-                        </div>
-                        <div class="function-card" onclick="quickAction('message')">
-                            <i class="fas fa-comment"></i>
-                            <h3>消息</h3>
-                            <p>短信管理</p>
-                        </div>
-                        <div class="function-card" onclick="quickAction('camera')">
-                            <i class="fas fa-camera"></i>
-                            <h3>摄像头</h3>
-                            <p>环视系统</p>
-                        </div>
-                        <div class="function-card" onclick="quickAction('weather')">
-                            <i class="fas fa-cloud-sun"></i>
-                            <h3>天气</h3>
-                            <p>实时天气</p>
-                        </div>
-                        <div class="function-card" onclick="quickAction('calendar')">
-                            <i class="fas fa-calendar-alt"></i>
-                            <h3>日程</h3>
-                            <p>行程管理</p>
-                        </div>
-                        <div class="function-card" onclick="quickAction('emergency')">
-                            <i class="fas fa-exclamation-triangle"></i>
-                            <h3>紧急</h3>
-                            <p>紧急求助</p>
-                        </div>
-                    </div>
-
-                    <!-- 驾驶模式选择 -->
-                    <div class="driving-modes">
-                        <h3>驾驶模式</h3>
-                        <div class="mode-selector">
-                            <button class="mode-btn active" onclick="setDrivingMode('normal')">
-                                <i class="fas fa-car"></i>
-                                <span>标准</span>
-                            </button>
-                            <button class="mode-btn" onclick="setDrivingMode('sport')">
-                                <i class="fas fa-tachometer-alt"></i>
-                                <span>运动</span>
-                            </button>
-                            <button class="mode-btn" onclick="setDrivingMode('eco')">
-                                <i class="fas fa-leaf"></i>
-                                <span>节能</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 第三页：系统信息 -->
-            <div class="page">
-                <div class="main-interface">
-                    <div class="welcome-section">
-                        <h1>系统信息</h1>
-                        <p>车辆和系统状态概览</p>
-                    </div>
-                    
-                    <div class="system-info-grid">
-                        <div class="info-card">
-                            <i class="fas fa-microchip"></i>
-                            <h3>系统版本</h3>
-                            <p>v2.1.0</p>
-                        </div>
-                        <div class="info-card">
-                            <i class="fas fa-wifi"></i>
-                            <h3>网络状态</h3>
-                            <p>已连接</p>
-                        </div>
-                        <div class="info-card">
-                            <i class="fas fa-satellite"></i>
-                            <h3>GPS信号</h3>
-                            <p>强</p>
-                        </div>
-                        <div class="info-card">
-                            <i class="fas fa-battery-three-quarters"></i>
-                            <h3>系统电量</h3>
-                            <p>85%</p>
-                        </div>
-                        <div class="info-card">
-                            <i class="fas fa-thermometer-half"></i>
-                            <h3>系统温度</h3>
-                            <p>42°C</p>
-                        </div>
-                        <div class="info-card">
-                            <i class="fas fa-clock"></i>
-                            <h3>运行时间</h3>
-                            <p>2小时15分</p>
-                        </div>
-                    </div>
-
-                    <!-- 系统日志 -->
-                    <div class="system-log">
-                        <h3>系统日志</h3>
-                        <div class="log-container">
-                            <div class="log-item">
-                                <span class="log-time">14:30</span>
-                                <span class="log-message">系统启动完成</span>
-                            </div>
-                            <div class="log-item">
-                                <span class="log-time">14:32</span>
-                                <span class="log-message">GPS定位成功</span>
-                            </div>
-                            <div class="log-item">
-                                <span class="log-time">14:35</span>
-                                <span class="log-message">蓝牙设备已连接</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 滑动指示器 -->
-        <div class="swipe-indicator">
-            <div class="swipe-dot active" onclick="goToPage(0)"></div>
-            <div class="swipe-dot" onclick="goToPage(1)"></div>
-            <div class="swipe-dot" onclick="goToPage(2)"></div>
-        </div>
-
-        <!-- 车辆状态模块 -->
-        <div class="module" id="vehicle-module">
+        <!-- Vehicle Status Module -->
+        <div id="status-module" class="module">
             <div class="module-header">
                 <h2>车辆状态</h2>
+                <button class="close-module-btn"><i class="fas fa-times"></i></button>
             </div>
-            <div class="vehicle-status-grid">
-                <div class="status-card">
-                    <i class="fas fa-tachometer-alt"></i>
-                    <h3>速度</h3>
-                    <p id="vehicle-speed">0 km/h</p>
-                </div>
-                <div class="status-card">
-                    <i class="fas fa-gas-pump"></i>
-                    <h3>油量</h3>
-                    <p id="vehicle-fuel">85%</p>
-                </div>
-                <div class="status-card">
-                    <i class="fas fa-thermometer-half"></i>
-                    <h3>温度</h3>
-                    <p id="vehicle-temp">22°C</p>
-                </div>
-                <div class="status-card">
-                    <i class="fas fa-battery-three-quarters"></i>
-                    <h3>电池</h3>
-                    <p id="vehicle-battery">90%</p>
-                </div>
-                <div class="status-card">
-                    <i class="fas fa-tire"></i>
-                    <h3>胎压</h3>
-                    <p id="vehicle-tire">32/31/33/32 PSI</p>
-                </div>
-                <div class="status-card">
-                    <i class="fas fa-road"></i>
-                    <h3>里程</h3>
-                    <p id="vehicle-odometer">12,500 km</p>
-                </div>
-            </div>
-            <div class="module-footer">
-                <button class="back-btn-footer" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i> 返回
-                </button>
-            </div>
-        </div>
-
-        <!-- 空调控制模块 -->
-        <div class="module" id="ac-module">
-            <div class="module-header">
-                <h2>空调控制</h2>
-            </div>
-            <div class="ac-controls">
-                <div class="ac-section">
-                    <h3>温度控制</h3>
-                    <div class="temperature-control">
-                        <button onclick="adjustTemperature(-1)">-</button>
-                        <span id="ac-temperature">22°C</span>
-                        <button onclick="adjustTemperature(1)">+</button>
-                    </div>
-                </div>
-                <div class="ac-section">
-                    <h3>风速控制</h3>
-                    <div class="fan-control">
-                        <button onclick="adjustFanSpeed(-1)">-</button>
-                        <span id="ac-fan-speed">2</span>
-                        <button onclick="adjustFanSpeed(1)">+</button>
-                    </div>
-                </div>
-                <div class="ac-section">
-                    <h3>模式选择</h3>
-                    <div class="mode-buttons">
-                        <button class="mode-btn active" onclick="setACMode('auto')">自动</button>
-                        <button class="mode-btn" onclick="setACMode('cool')">制冷</button>
-                        <button class="mode-btn" onclick="setACMode('heat')">制热</button>
-                    </div>
-                </div>
-                <div class="ac-section">
-                    <h3>功能开关</h3>
-                    <div class="function-buttons">
-                        <button class="function-btn" onclick="toggleDefrost()">
-                            <i class="fas fa-wind"></i>
-                            除霜
-                        </button>
-                        <button class="function-btn" onclick="toggleRecirculation()">
-                            <i class="fas fa-recycle"></i>
-                            内循环
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="module-footer">
-                <button class="back-btn-footer" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i> 返回
-                </button>
-            </div>
-        </div>
-
-        <!-- 多媒体模块 -->
-        <div class="module" id="media-module">
-            <div class="module-header">
-                <h2>多媒体娱乐</h2>
-            </div>
-            <div class="media-player">
-                <div class="now-playing">
-                    <div class="album-art">
-                        <i class="fas fa-music"></i>
-                    </div>
-                    <div class="track-info">
-                        <h3 id="current-track">未知歌曲</h3>
-                        <p id="current-artist">未知艺术家</p>
-                    </div>
-                </div>
-                <div class="media-controls">
-                    <button onclick="previousTrack()">
-                        <i class="fas fa-step-backward"></i>
-                    </button>
-                    <button class="play-btn" onclick="togglePlay()" id="play-btn">
-                        <i class="fas fa-play"></i>
-                    </button>
-                    <button onclick="nextTrack()">
-                        <i class="fas fa-step-forward"></i>
-                    </button>
-                </div>
-                <div class="volume-control">
-                    <i class="fas fa-volume-down"></i>
-                    <input type="range" id="volume-slider" min="0" max="100" value="50" onchange="adjustVolume(this.value)">
-                    <i class="fas fa-volume-up"></i>
-                </div>
-                <div class="source-selector">
-                    <button class="source-btn active" onclick="changeSource('radio')">收音机</button>
-                    <button class="source-btn" onclick="changeSource('bluetooth')">蓝牙</button>
-                    <button class="source-btn" onclick="changeSource('usb')">USB</button>
-                </div>
-            </div>
-            <div class="module-footer">
-                <button class="back-btn-footer" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i> 返回
-                </button>
-            </div>
-        </div>
-
-        <!-- 导航模块 -->
-        <div class="module" id="navigation-module">
-            <div class="module-header">
-                <h2>导航</h2>
-            </div>
-            <div class="navigation-content">
-                <div class="destination-input">
-                    <input type="text" id="destination-input" placeholder="输入目的地">
-                    <button onclick="setDestination()">开始导航</button>
-                </div>
-                <div class="navigation-info">
-                    <div class="nav-card">
-                        <h3>目的地</h3>
-                        <p id="nav-destination">未设置目的地</p>
-                    </div>
-                    <div class="nav-card">
-                        <h3>预计时间</h3>
-                        <p id="nav-eta">未知</p>
-                    </div>
-                    <div class="nav-card">
-                        <h3>距离</h3>
-                        <p id="nav-distance">未知</p>
-                    </div>
-                </div>
-                <div class="map-placeholder">
-                    <i class="fas fa-map"></i>
-                    <p>地图显示区域</p>
-                </div>
-            </div>
-            <div class="module-footer">
-                <button class="back-btn-footer" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i> 返回
-                </button>
-            </div>
-        </div>
-
-        <!-- 车载应用模块 -->
-        <div class="module" id="apps-module">
-            <div class="module-header">
-                <h2>车载应用</h2>
-            </div>
-            <div class="apps-grid">
-                <div class="app-card">
-                    <i class="fas fa-phone"></i>
-                    <h3>电话</h3>
-                </div>
-                <div class="app-card">
-                    <i class="fas fa-comment"></i>
-                    <h3>消息</h3>
-                </div>
-                <div class="app-card">
-                    <i class="fas fa-calendar"></i>
-                    <h3>日历</h3>
-                </div>
-                <div class="app-card">
-                    <i class="fas fa-weather-sunny"></i>
-                    <h3>天气</h3>
-                </div>
-                <div class="app-card">
-                    <i class="fas fa-camera"></i>
-                    <h3>摄像头</h3>
-                </div>
-                <div class="app-card">
-                    <i class="fas fa-gamepad"></i>
-                    <h3>游戏</h3>
-                </div>
-            </div>
-            <div class="module-footer">
-                <button class="back-btn-footer" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i> 返回
-                </button>
-            </div>
-        </div>
-
-        <!-- 设置模块 -->
-        <div class="module" id="settings-module">
-            <div class="module-header">
-                <h2>系统设置</h2>
-            </div>
-            <div class="settings-content">
-                <div class="setting-section">
-                    <h3>显示设置</h3>
-                    <div class="setting-item">
-                        <span>亮度</span>
-                        <input type="range" min="0" max="100" value="80">
-                    </div>
-                    <div class="setting-item">
-                        <span>主题</span>
-                        <select>
-                            <option>深色主题</option>
-                            <option>浅色主题</option>
-                            <option>自动</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="setting-section">
-                    <h3>声音设置</h3>
-                    <div class="setting-item">
-                        <span>系统音量</span>
-                        <input type="range" min="0" max="100" value="70">
-                    </div>
-                    <div class="setting-item">
-                        <span>语音提示</span>
-                        <input type="checkbox" checked>
-                    </div>
-                </div>
-                <div class="setting-section">
-                    <h3>连接设置</h3>
-                    <div class="setting-item">
-                        <span>WiFi</span>
-                        <button class="toggle-btn">开启</button>
-                    </div>
-                    <div class="setting-item">
-                        <span>蓝牙</span>
-                        <button class="toggle-btn">开启</button>
-                    </div>
-                </div>
-            </div>
-            <div class="module-footer">
-                <button class="back-btn-footer" onclick="showMainInterface()">
-                    <i class="fas fa-arrow-left"></i> 返回
-                </button>
-            </div>
-        </div>
-
-        <!-- 语音控制状态 -->
-        <div class="voice-status" id="voice-status">
-            <div class="voice-indicator-large">
-                <i class="fas fa-microphone"></i>
-                <p id="voice-status-text">正在聆听...</p>
-                <button id="stop-recording-btn" class="stop-recording-btn">
-                    <i class="fas fa-stop-circle"></i> 结束
-                </button>
+            <div class="module-content">
+                <p>内容待添加...</p>
             </div>
         </div>
     </div>
 
+    <!-- ======================================================================= -->
+    <!-- ============================== Settings Module ============================ -->
+    <!-- ======================================================================= -->
+    <div id="settings-module" class="module">
+        <div class="module-header">
+            <h2>设置</h2>
+            <button class="close-module-btn"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="module-content">
+            <div class="settings-grid">
+                <button class="setting-btn"><i class="fas fa-desktop"></i><span>显示</span></button>
+                <button class="setting-btn"><i class="fas fa-volume-up"></i><span>声音</span></button>
+                <button class="setting-btn"><i class="fas fa-wifi"></i><span>连接</span></button>
+                <button class="setting-btn"><i class="fas fa-car"></i><span>车辆</span></button>
+                <button class="setting-btn"><i class="fas fa-user-cog"></i><span>个人资料</span></button>
+                <button class="setting-btn"><i class="fas fa-bell"></i><span>通知</span></button>
+                <button class="setting-btn"><i class="fas fa-shield-alt"></i><span>安全</span></button>
+                <button class="setting-btn"><i class="fas fa-info-circle"></i><span>关于</span></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- ============================= Apps Module (NEW) ========================= -->
+    <!-- ======================================================================= -->
+    <div id="apps-module" class="module">
+        <div class="module-header">
+            <h2>车载应用</h2>
+            <button class="close-module-btn" data-target="app-drawer"><i class="fas fa-arrow-left"></i></button>
+        </div>
+        <div class="module-content">
+            <div class="apps-grid">
+                <!-- Future apps will go here -->
+                <p style="color: #6e7681;">更多应用正在开发中...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================================= -->
+    <!-- ========================= Fatigue Monitor Module (NEW) ================ -->
+    <!-- ======================================================================= -->
+    <div id="fatigue-module" class="module">
+        <div class="module-header">
+            <h2>疲劳监测</h2>
+            <button class="close-module-btn"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="module-content" style="justify-content: center; align-items: center; text-align: center; color: #6e7681;">
+            <i class="fas fa-bed" style="font-size: 8rem; margin-bottom: 20px;"></i>
+            <h3>疲劳监测功能正在开发中</h3>
+        </div>
+    </div>
+
+    </div>
+
+    <!-- Amap JS API Loader -->
+    <script type="text/javascript" src="https://webapi.amap.com/loader.js"></script>
+    <!-- Main App Logic -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
-</html> 
+</html>
