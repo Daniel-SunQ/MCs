@@ -3,4 +3,5 @@ Flask-CORS==4.0.0
 requests==2.31.0
 python-dotenv==1.0.0
 websockets==11.0.3
-httpx==0.25.2 
+httpx==0.25.2
+mutagen==1.47.0 
