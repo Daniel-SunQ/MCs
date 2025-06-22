@@ -178,7 +178,7 @@ def get_config():
         'amap_security_secret': os.getenv('AMAP_SECURITY_SECRET')
     })
 
-
+#weather interface
 @app.route('/api/weather')
 def get_weather():
     city_name = request.args.get('city')
