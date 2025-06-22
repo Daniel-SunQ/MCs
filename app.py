@@ -3,6 +3,10 @@ from flask_cors import CORS
 import json
 import os
 from datetime import datetime
+import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -173,6 +177,44 @@ def get_config():
         'amap_key': os.getenv('AMAP_API_KEY'),
         'amap_security_secret': os.getenv('AMAP_SECURITY_SECRET')
     })
+
+
+@app.route('/api/weather')
+def get_weather():
+    city_name = request.args.get('city')
+    api_key = os.getenv('QWEATHER_API_KEY')
+
+    if not city_name or not api_key:
+        return jsonify({"error": "缺少城市名称或API密钥"}), 400
+
+    with httpx.Client() as client:
+        try:
+            # 1. 获取城市ID
+            geo_url = f"https://geoapi.qweather.com/v2/city/lookup?location={city_name}&key={api_key}"
+            geo_response = client.get(geo_url)
+            geo_response.raise_for_status()
+            geo_data = geo_response.json()
+
+            if geo_data.get("code") != "200" or not geo_data.get("location"):
+                return jsonify({"error": "找不到该城市"}), 404
+            
+            location_id = geo_data["location"][0]["id"]
+
+            # 2. 获取实时天气
+            weather_url = f"https://devapi.qweather.com/v7/weather/now?location={location_id}&key={api_key}"
+            weather_response = client.get(weather_url)
+            weather_response.raise_for_status()
+            weather_data = weather_response.json()
+
+            if weather_data.get("code") != "200":
+                 return jsonify({"error": "获取天气信息失败", "details": weather_data}), 500
+
+            return jsonify(weather_data.get("now", {}))
+
+        except httpx.HTTPStatusError as e:
+            return jsonify({"error": f"API请求失败: {e.response.status_code}", "details": str(e)}), 500
+        except Exception as e:
+            return jsonify({"error": "服务器内部错误", "details": str(e)}), 500
 
 
 if __name__ == "__main__":
