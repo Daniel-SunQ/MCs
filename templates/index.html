@@ -68,11 +68,11 @@
                 <div id="app-dock-icon" class="app-icon app-drawer-btn"><i class="fas fa-th-large"></i></div>
             </div>
             <div id="media-dock-widget" class="dock-item media-player-widget">
-                 <i class="fab fa-spotify"></i>
-                <span>Dance with You - K</span>
-                <i class="fas fa-step-backward"></i>
-                <i class="fas fa-pause"></i>
-                <i class="fas fa-step-forward"></i>
+                 <i class="fab fa-spotify" id="dock-media-icon"></i>
+                <span id="dock-song-info">无音乐</span>
+                <i class="fas fa-step-backward" id="dock-prev-btn"></i>
+                <i class="fas fa-pause" id="dock-play-pause-btn"></i>
+                <i class="fas fa-step-forward" id="dock-next-btn"></i>
             </div>
             <div id="passenger-temp-control-dock" class="dock-item temp-control passenger">
                 <i id="passenger-temp-down-dock" class="fas fa-chevron-left"></i>
@@ -206,10 +206,6 @@
                 <button class="close-module-btn"><i class="fas fa-times"></i></button>
                 <h2>车辆状态</h2><p>内容待添加...</p>
             </div>
-            <div class="module" id="media-module" style="display: none;">
-                <button class="close-module-btn"><i class="fas fa-times"></i></button>
-                <h2>多媒体</h2><p>内容待添加...</p>
-            </div>
             <div class="module" id="navigation-module" style="display: none;">
                 <button class="close-module-btn"><i class="fas fa-times"></i></button>
                 <h2>导航</h2><p>内容待添加...</p>
@@ -248,30 +244,127 @@
         <!-- ======================================================================= -->
         <div id="media-module" class="module">
              <div class="module-header">
-                <h2>播放器</h2>
+                <h2>音乐播放器</h2>
                 <button class="close-module-btn"><i class="fas fa-times"></i></button>
             </div>
             <div class="module-content media-player-content">
-                <div class="album-art-lg">
-                    <img src="{{ url_for('static', filename='images/car_menu.jpg') }}" alt="Album Art">
-                </div>
-                <div class="song-info-lg">
-                    <h2>Dance with You</h2>
-                    <p>K</p>
-                </div>
-                <div class="progress-bar-container">
-                    <span>1:28</span>
-                    <div class="progress-bar">
-                        <div class="progress-bar-inner" style="width: 45%;"></div>
+                <!-- 主要播放区域 -->
+                <div class="player-main-section">
+                    <!-- 专辑封面 -->
+                    <div class="album-art-container">
+                        <div class="album-art">
+                            <img src="{{ url_for('static', filename='images/car_menu.jpg') }}" alt="专辑封面" id="current-album-art">
+                            <div class="album-art-overlay">
+                                <i class="fas fa-music"></i>
+                            </div>
+                        </div>
                     </div>
-                    <span>3:10</span>
+                    
+                    <!-- 歌曲信息 -->
+                    <div class="song-info">
+                        <h3 id="current-song-title">夜曲</h3>
+                        <p id="current-song-artist">周杰伦</p>
+                        <p id="current-song-album">十一月的萧邦</p>
+                    </div>
+                    
+                    <!-- 播放进度 -->
+                    <div class="progress-section">
+                        <div class="time-display">
+                            <span id="current-time">0:00</span>
+                            <span id="total-time">3:45</span>
+                        </div>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="progress-bar">
+                                <div class="progress-fill" id="progress-fill"></div>
+                                <div class="progress-handle" id="progress-handle"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 播放控制 -->
+                    <div class="playback-controls">
+                        <button class="control-btn" id="shuffle-btn" title="随机播放">
+                            <i class="fas fa-random"></i>
+                        </button>
+                        <button class="control-btn" id="prev-btn" title="上一首">
+                            <i class="fas fa-step-backward"></i>
+                        </button>
+                        <button class="control-btn play-pause-btn" id="play-pause-btn" title="播放/暂停">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button class="control-btn" id="next-btn" title="下一首">
+                            <i class="fas fa-step-forward"></i>
+                        </button>
+                        <button class="control-btn" id="repeat-btn" title="循环播放">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- 音量控制 -->
+                    <div class="volume-section">
+                        <i class="fas fa-volume-down"></i>
+                        <div class="volume-bar-container">
+                            <div class="volume-bar" id="volume-bar">
+                                <div class="volume-fill" id="volume-fill"></div>
+                                <div class="volume-handle" id="volume-handle"></div>
+                            </div>
+                        </div>
+                        <i class="fas fa-volume-up"></i>
+                    </div>
                 </div>
-                <div class="main-playback-controls">
-                    <button class="playback-btn"><i class="fas fa-random"></i></button>
-                    <button class="playback-btn"><i class="fas fa-step-backward"></i></button>
-                    <button class="playback-btn play-pause-btn"><i class="fas fa-pause"></i></button>
-                    <button class="playback-btn"><i class="fas fa-step-forward"></i></button>
-                    <button class="playback-btn"><i class="fas fa-redo"></i></button>
+                
+                <!-- 播放列表区域 -->
+                <div class="playlist-section">
+                    <div class="playlist-header">
+                        <h4>播放列表</h4>
+                        <button class="playlist-btn" id="add-song-btn" title="添加歌曲">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                    <div class="playlist-container">
+                        <div class="playlist-item active" data-song-id="1">
+                            <div class="playlist-item-info">
+                                <span class="playlist-song-title">夜曲</span>
+                                <span class="playlist-song-artist">周杰伦</span>
+                            </div>
+                            <span class="playlist-song-duration">3:45</span>
+                        </div>
+                        <div class="playlist-item" data-song-id="2">
+                            <div class="playlist-item-info">
+                                <span class="playlist-song-title">稻香</span>
+                                <span class="playlist-song-artist">周杰伦</span>
+                            </div>
+                            <span class="playlist-song-duration">3:42</span>
+                        </div>
+                        <div class="playlist-item" data-song-id="3">
+                            <div class="playlist-item-info">
+                                <span class="playlist-song-title">青花瓷</span>
+                                <span class="playlist-song-artist">周杰伦</span>
+                            </div>
+                            <span class="playlist-song-duration">3:59</span>
+                        </div>
+                        <div class="playlist-item" data-song-id="4">
+                            <div class="playlist-item-info">
+                                <span class="playlist-song-title">晴天</span>
+                                <span class="playlist-song-artist">周杰伦</span>
+                            </div>
+                            <span class="playlist-song-duration">4:29</span>
+                        </div>
+                        <div class="playlist-item" data-song-id="5">
+                            <div class="playlist-item-info">
+                                <span class="playlist-song-title">七里香</span>
+                                <span class="playlist-song-artist">周杰伦</span>
+                            </div>
+                            <span class="playlist-song-duration">5:04</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 歌词显示区域 -->
+                <div class="lyrics-section">
+                    <div class="lyrics-container" id="lyrics-container">
+                        <p class="lyrics-line">歌词加载中...</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -346,5 +439,6 @@
     <script type="text/javascript" src="https://webapi.amap.com/loader.js"></script>
     <!-- Main App Logic -->
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
 </body>
 </html>
