@@ -54,6 +54,398 @@ document.addEventListener('DOMContentLoaded', () => {
     const weatherDisplay = document.getElementById('weather-display');
 
     // =======================================================================
+    // =========================== MUSIC PLAYER LOGIC ======================== */
+    // ======================================================================= */
+    
+    const musicPlayerElements = {
+        playPauseBtn: document.getElementById('play-pause-btn'),
+        prevBtn: document.getElementById('prev-btn'),
+        nextBtn: document.getElementById('next-btn'),
+        shuffleBtn: document.getElementById('shuffle-btn'),
+        repeatBtn: document.getElementById('repeat-btn'),
+        progressBarContainer: document.querySelector('.progress-bar-container'),
+        progressFill: document.querySelector('.progress-fill'),
+        currentTimeDisplay: document.getElementById('current-time'),
+        totalTimeDisplay: document.getElementById('total-time'),
+        volumeBarContainer: document.querySelector('.volume-bar-container'),
+        volumeFill: document.querySelector('.volume-fill'),
+        currentSongTitle: document.getElementById('current-song-title'),
+        currentSongArtist: document.getElementById('current-song-artist'),
+        currentSongAlbum: document.getElementById('current-song-album'),
+        currentAlbumArt: document.getElementById('current-album-art'),
+        playlistContainer: document.querySelector('.playlist-container'),
+        lyricsContainer: document.getElementById('lyrics-container'),
+        // Dock Widget Elements
+        dockSongInfo: document.getElementById('dock-song-info'),
+        dockPlayPauseBtn: document.getElementById('dock-play-pause-btn'),
+        dockPrevBtn: document.getElementById('dock-prev-btn'),
+        dockNextBtn: document.getElementById('dock-next-btn')
+    };
+    
+    let audioPlayer = new Audio();
+    let currentPlaylist = [];
+    let currentSongIndex = 0;
+    let isPlaying = false;
+    let isShuffle = false;
+    let repeatMode = 'none'; // 'none', 'all', 'one'
+    let parsedLyrics = [];
+
+    function formatTime(seconds) {
+        if (isNaN(seconds)) return '0:00';
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = Math.floor(seconds % 60);
+        return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+
+    function parseLyrics(lrcText) {
+        if (!lrcText) return [];
+        const lines = lrcText.split('\n');
+        const result = [];
+        const timeRegex = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
+
+        for (const line of lines) {
+            const match = timeRegex.exec(line);
+            if (match) {
+                const minutes = parseInt(match[1], 10);
+                const seconds = parseInt(match[2], 10);
+                const milliseconds = parseInt(match[3].padEnd(3, '0'), 10);
+                const time = minutes * 60 + seconds + milliseconds / 1000;
+                const text = line.replace(timeRegex, '').trim();
+                if (text) {
+                    result.push({ time, text });
+                }
+            }
+        }
+        return result;
+    }
+
+    function updateUI() {
+        if (!musicPlayerElements.currentSongTitle) return;
+
+        // Update song info
+        const song = currentPlaylist[currentSongIndex];
+        musicPlayerElements.currentSongTitle.textContent = song.title;
+        musicPlayerElements.currentSongArtist.textContent = song.artist;
+        musicPlayerElements.currentSongAlbum.textContent = song.album;
+        musicPlayerElements.currentAlbumArt.src = song.cover;
+        musicPlayerElements.totalTimeDisplay.textContent = formatTime(song.duration);
+
+        // Update playlist items
+        musicPlayerElements.playlistContainer.innerHTML = '';
+        currentPlaylist.forEach((s, index) => {
+            const item = document.createElement('div');
+            item.className = `playlist-item ${index === currentSongIndex ? 'active' : ''}`;
+            item.innerHTML = `<div class="playlist-item-info"><span class="playlist-song-title">${s.title}</span><span class="playlist-song-artist">${s.artist}</span></div><span class="playlist-song-duration">${formatTime(s.duration)}</span>`;
+            item.addEventListener('click', () => playSongByIndex(index));
+            musicPlayerElements.playlistContainer.appendChild(item);
+        });
+
+        // Update play/pause button (main player)
+        const playerIcon = musicPlayerElements.playPauseBtn.querySelector('i');
+        if(playerIcon) playerIcon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
+
+        // Update play/pause button (dock widget)
+        const dockIcon = musicPlayerElements.dockPlayPauseBtn;
+        if(dockIcon) dockIcon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
+        
+        // Update dock song info
+        if(musicPlayerElements.dockSongInfo) {
+            musicPlayerElements.dockSongInfo.textContent = `${song.title} - ${song.artist}`;
+        }
+
+        // Update shuffle/repeat buttons
+        musicPlayerElements.shuffleBtn.classList.toggle('active', isShuffle);
+        musicPlayerElements.repeatBtn.classList.remove('active', 'one');
+        if (repeatMode === 'one') {
+            musicPlayerElements.repeatBtn.classList.add('active', 'one');
+            musicPlayerElements.repeatBtn.querySelector('i').className = 'fas fa-redo-alt'; 
+        } else if (repeatMode === 'all') {
+            musicPlayerElements.repeatBtn.classList.add('active');
+            musicPlayerElements.repeatBtn.querySelector('i').className = 'fas fa-redo';
+        } else {
+             musicPlayerElements.repeatBtn.classList.remove('active');
+            musicPlayerElements.repeatBtn.querySelector('i').className = 'fas fa-redo';
+        }
+    }
+
+    function updateProgress() {
+        if (!audioPlayer.duration) return;
+        const progress = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+        musicPlayerElements.progressFill.style.width = `${progress}%`;
+        musicPlayerElements.currentTimeDisplay.textContent = formatTime(audioPlayer.currentTime);
+        updateLyrics();
+    }
+
+    function updateLyrics() {
+        if (parsedLyrics.length === 0) return;
+    
+        let currentIndex = -1;
+        for (let i = 0; i < parsedLyrics.length; i++) {
+            if (audioPlayer.currentTime >= parsedLyrics[i].time) {
+                currentIndex = i;
+            } else {
+                break;
+            }
+        }
+    
+        if (currentIndex !== -1) {
+            const allLines = musicPlayerElements.lyricsContainer.querySelectorAll('.lyrics-line');
+            if (allLines.length === 0) return;
+    
+            // Check if the active line has changed
+            const currentActive = musicPlayerElements.lyricsContainer.querySelector('.lyrics-line.active');
+            if (currentActive && parseInt(currentActive.dataset.index, 10) === currentIndex) {
+                return; // No change, do nothing
+            }
+    
+            // Remove active class from previous line
+            if (currentActive) {
+                currentActive.classList.remove('active');
+            }
+    
+            // Add active class to the new line and scroll
+            const activeLine = allLines[currentIndex];
+            if (activeLine) {
+                activeLine.classList.add('active');
+                activeLine.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'nearest'
+                });
+            }
+        }
+    }
+    
+    async function loadAndPlay(index) {
+        currentSongIndex = index;
+        const song = currentPlaylist[currentSongIndex];
+        audioPlayer.src = song.file_path;
+        
+        // Reset and fetch lyrics
+        musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">歌词加载中...</p>';
+        parsedLyrics = [];
+        if (song.has_lyrics) {
+            try {
+                const response = await fetch(`/api/music/lyrics/${song.id}`);
+                const data = await response.json();
+                if (data.lyrics) {
+                    parsedLyrics = parseLyrics(data.lyrics);
+                    renderLyrics();
+                } else {
+                     musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">此歌曲暂无歌词</p>';
+                }
+            } catch (error) {
+                console.error('获取歌词失败:', error);
+                musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">歌词加载失败</p>';
+            }
+        } else {
+            musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">此歌曲暂无歌词</p>';
+        }
+
+        audioPlayer.play();
+        isPlaying = true;
+        updateUI();
+    }
+    
+    function renderLyrics() {
+        if (!musicPlayerElements.lyricsContainer) return;
+        if (parsedLyrics.length > 0) {
+            musicPlayerElements.lyricsContainer.innerHTML = parsedLyrics.map((line, index) => 
+                `<p class="lyrics-line" data-index="${index}">${line.text}</p>`
+            ).join('');
+        } else {
+            musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">此歌曲暂无歌词</p>';
+        }
+    }
+
+    function playSongByIndex(index) {
+        loadAndPlay(index);
+    }
+
+    function togglePlayPause() {
+        if (isPlaying) {
+            audioPlayer.pause();
+            isPlaying = false;
+        } else {
+            audioPlayer.play();
+            isPlaying = true;
+        }
+        updateUI();
+    }
+
+    function changeSong(direction) {
+        let nextIndex;
+        if (isShuffle) {
+            nextIndex = Math.floor(Math.random() * currentPlaylist.length);
+        } else {
+            nextIndex = (currentSongIndex + direction + currentPlaylist.length) % currentPlaylist.length;
+        }
+        loadAndPlay(nextIndex);
+    }
+    
+    async function initMusicPlayer() {
+        try {
+            const response = await fetch('/api/music/playlist');
+            if (!response.ok) throw new Error('Network error');
+            const data = await response.json();
+            currentPlaylist = data.playlist;
+
+            if (currentPlaylist && currentPlaylist.length > 0) {
+                // Bind events for main player
+                musicPlayerElements.playPauseBtn.addEventListener('click', togglePlayPause);
+                musicPlayerElements.nextBtn.addEventListener('click', () => changeSong(1));
+                musicPlayerElements.prevBtn.addEventListener('click', () => changeSong(-1));
+
+                // Bind events for DOCK WIDGET
+                musicPlayerElements.dockPlayPauseBtn.addEventListener('click', togglePlayPause);
+                musicPlayerElements.dockNextBtn.addEventListener('click', () => changeSong(1));
+                musicPlayerElements.dockPrevBtn.addEventListener('click', () => changeSong(-1));
+
+                musicPlayerElements.shuffleBtn.addEventListener('click', () => {
+                    isShuffle = !isShuffle;
+                    updateUI();
+                });
+
+                musicPlayerElements.repeatBtn.addEventListener('click', () => {
+                    const modes = ['none', 'all', 'one'];
+                    repeatMode = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
+                    if (repeatMode === 'one') {
+                        audioPlayer.loop = true;
+                    } else {
+                        audioPlayer.loop = false;
+                    }
+                    updateUI();
+                });
+
+                audioPlayer.addEventListener('timeupdate', updateProgress);
+                audioPlayer.addEventListener('ended', () => {
+                    if (repeatMode !== 'one') { // 'one' is handled by audio.loop
+                        changeSong(1);
+                    }
+                });
+
+                musicPlayerElements.progressBarContainer.addEventListener('click', e => {
+                    const rect = musicPlayerElements.progressBarContainer.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    audioPlayer.currentTime = (clickX / rect.width) * audioPlayer.duration;
+                });
+                
+                musicPlayerElements.volumeBarContainer.addEventListener('click', e => {
+                     const rect = musicPlayerElements.volumeBarContainer.getBoundingClientRect();
+                    const clickX = e.clientX - rect.left;
+                    audioPlayer.volume = Math.max(0, Math.min(1, clickX / rect.width));
+                    musicPlayerElements.volumeFill.style.width = `${audioPlayer.volume * 100}%`;
+                });
+                
+                // Initial load
+                const song = currentPlaylist[currentSongIndex];
+                audioPlayer.src = song.file_path;
+                musicPlayerElements.volumeFill.style.width = `${audioPlayer.volume * 100}%`;
+                updateUI();
+            }
+        } catch (error) {
+            console.error('Failed to initialize music player:', error);
+        }
+    }
+
+    // =======================================================================
+    // ====================== TEMPERATURE SYNC LOGIC =========================
+    // =======================================================================
+    function updateAllTempDisplays() {
+        if(driverTempDisplayDock) driverTempDisplayDock.textContent = `${driverTemp.toFixed(1)}°`;
+        if(passengerTempDisplayDock) passengerTempDisplayDock.textContent = `${passengerTemp.toFixed(1)}°`;
+        if(acDriverTempDisplay) acDriverTempDisplay.textContent = driverTemp.toFixed(1);
+        if(acPassengerTempDisplay) acPassengerTempDisplay.textContent = passengerTemp.toFixed(1);
+    }
+    
+    function changeTemp(zone, direction) {
+        const step = 0.5;
+        const minTemp = 16;
+        const maxTemp = 30;
+        if (zone === 'driver') {
+            driverTemp += direction * step;
+            driverTemp = Math.max(minTemp, Math.min(maxTemp, driverTemp));
+        } else {
+            passengerTemp += direction * step;
+            passengerTemp = Math.max(minTemp, Math.min(maxTemp, passengerTemp));
+        }
+        updateAllTempDisplays();
+    }
+    
+    if(driverTempUpDock) driverTempUpDock.addEventListener('click', () => changeTemp('driver', 1));
+    if(driverTempDownDock) driverTempDownDock.addEventListener('click', () => changeTemp('driver', -1));
+    if(passengerTempUpDock) passengerTempUpDock.addEventListener('click', () => changeTemp('passenger', 1));
+    if(passengerTempDownDock) passengerTempDownDock.addEventListener('click', () => changeTemp('passenger', -1));
+    
+    if(acDriverTempUp) acDriverTempUp.addEventListener('click', () => changeTemp('driver', 1));
+    if(acDriverTempDown) acDriverTempDown.addEventListener('click', () => changeTemp('driver', -1));
+    if(acPassengerTempUp) acPassengerTempUp.addEventListener('click', () => changeTemp('passenger', 1));
+    if(acPassengerTempDown) acPassengerTempDown.addEventListener('click', () => changeTemp('passenger', -1));
+
+    // =======================================================================
+    // ======================== CLOCK & DATE LOGIC ===========================
+    // =======================================================================
+    function updateTime() {
+        const now = new Date();
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        const currentTime = `${hours}:${minutes}`;
+        if(smallTimeDisplay) smallTimeDisplay.textContent = currentTime;
+        if(largeTimeDisplay) largeTimeDisplay.textContent = currentTime;
+    }
+
+    function formatDate() {
+        const now = new Date();
+        const optionsLine2 = { weekday: 'long' };
+        const optionsLine3 = { year: 'numeric', month: 'long', day: 'numeric' };
+        
+        const dateLine2 = new Intl.DateTimeFormat('zh-CN', optionsLine2).format(now);
+        const dateLine3 = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', optionsLine3).format(now);
+        
+        const largeDateDisplayLine2 = document.getElementById('large-date-display-line2');
+        const largeDateDisplayLine3 = document.getElementById('large-date-display-line3');
+
+        if(largeDateDisplayLine2) largeDateDisplayLine2.textContent = dateLine2;
+        if(largeDateDisplayLine3) largeDateDisplayLine3.textContent = dateLine3;
+    }
+
+    setInterval(updateTime, 1000);
+    updateTime();
+    formatDate();
+    
+    // =======================================================================
+    // ============================ WEATHER LOGIC ============================
+    // =======================================================================
+    async function getWeather(city) {
+        const weatherApiUrl = `/api/weather?city=${encodeURIComponent(city)}`;
+        try {
+            const response = await fetch(weatherApiUrl);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            updateWeatherUI(data);
+        } catch (error) {
+            console.error('获取天气数据失败:', error);
+            updateWeatherUI({ error: true });
+        }
+    }
+
+    function updateWeatherUI(data) {
+        if (!weatherIcon || !weatherDisplay) return;
+        if (data.error || !data.text) {
+            weatherDisplay.textContent = '天气未知';
+            weatherIcon.className = 'fas fa-question-circle';
+        } else {
+            weatherDisplay.textContent = `${data.text} ${data.temp}°C`;
+            weatherIcon.className = `qi-${data.icon}`;
+        }
+    }
+    
+    // Initial weather fetch
+    getWeather('重庆');
+
+    // =======================================================================
     // ======================== UI Switching Logic (UNIFIED) =================
     // =======================================================================
 
@@ -70,8 +462,15 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (viewId === 'map-module') {
                 initMap();
+            } else if (viewId === 'media-module') {
+                // Initialize music player only when the module is shown for the first time
+                if (!window.musicPlayerInitialized) {
+                    initMusicPlayer();
+                    window.musicPlayerInitialized = true;
+                }
             }
         } else {
+            // Default to main content if viewId is null or not found
             mainContent.style.display = 'flex';
         }
     }
@@ -81,8 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     closeModuleBtns.forEach(btn => {
         btn.addEventListener('click', () => {
-            const targetViewId = btn.getAttribute('data-target');
-            showView(targetViewId || 'main-content');
+             showView('main-content'); // Always go back to main screen
         });
     });
 
@@ -102,7 +500,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // =======================================================================
     // ======================== MAP & NAVIGATION LOGIC =======================
     // =======================================================================
-
     async function initMap() {
         if (map) return;
 
@@ -219,165 +616,4 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-
-    // =======================================================================
-    // ====================== TEMPERATURE SYNC LOGIC =========================
-    // =======================================================================
-
-    function updateAllTempDisplays() {
-        // Update Dock displays
-        if (driverTempDisplayDock) driverTempDisplayDock.textContent = `${driverTemp.toFixed(1)}°`;
-        if (passengerTempDisplayDock) passengerTempDisplayDock.textContent = `${passengerTemp.toFixed(1)}°`;
-
-        // Update AC module displays
-        if (acDriverTempDisplay) acDriverTempDisplay.textContent = driverTemp.toFixed(1);
-        if (acPassengerTempDisplay) acPassengerTempDisplay.textContent = passengerTemp.toFixed(1);
-    }
-    
-    function changeTemp(zone, direction) {
-        const step = 0.5;
-        const minTemp = 16;
-        const maxTemp = 30;
-
-        if (zone === 'driver') {
-            driverTemp += direction * step;
-            driverTemp = Math.max(minTemp, Math.min(maxTemp, driverTemp));
-        } else if (zone === 'passenger') {
-            passengerTemp += direction * step;
-            passengerTemp = Math.max(minTemp, Math.min(maxTemp, passengerTemp));
-        }
-        updateAllTempDisplays();
-    }
-
-    // --- Event Listeners for All Temperature Buttons ---
-    if(driverTempUpDock) driverTempUpDock.addEventListener('click', (e) => { e.stopPropagation(); changeTemp('driver', 1); });
-    if(driverTempDownDock) driverTempDownDock.addEventListener('click', (e) => { e.stopPropagation(); changeTemp('driver', -1); });
-    if(passengerTempUpDock) passengerTempUpDock.addEventListener('click', (e) => { e.stopPropagation(); changeTemp('passenger', 1); });
-    if(passengerTempDownDock) passengerTempDownDock.addEventListener('click', (e) => { e.stopPropagation(); changeTemp('passenger', -1); });
-
-    if(acDriverTempUp) acDriverTempUp.addEventListener('click', () => changeTemp('driver', 1));
-    if(acDriverTempDown) acDriverTempDown.addEventListener('click', () => changeTemp('driver', -1));
-    if(acPassengerTempUp) acPassengerTempUp.addEventListener('click', () => changeTemp('passenger', 1));
-    if(acPassengerTempDown) acPassengerTempDown.addEventListener('click', () => changeTemp('passenger', -1));
-
-
-    // =======================================================================
-    // =========================== UI HELPERS ================================
-    // =======================================================================
-    function updateTime() {
-        const now = new Date();
-        const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-        if (smallTimeDisplay) smallTimeDisplay.textContent = timeString;
-        if (largeTimeDisplay) largeTimeDisplay.textContent = timeString;
-    }
-
-    function formatDate() {
-        const dateLine2 = document.getElementById('large-date-display-line2');
-        const dateLine3 = document.getElementById('large-date-display-line3');
-        if (dateLine2 && dateLine3) {
-            const now = new Date();
-            const day = String(now.getDate()).padStart(2, '0');
-            const month = now.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-            dateLine2.textContent = day;
-            dateLine3.textContent = month;
-        }
-    }
-    
-    // =======================================================================
-    // ============================ WEATHER LOGIC ============================
-    // =======================================================================
-    const weatherIconMap = {
-        // Mapping QWeather icon codes to Font Awesome icons
-        "100": "fas fa-sun", // 晴
-        "101": "fas fa-cloud-sun", // 多云
-        "102": "fas fa-cloud", // 少云
-        "103": "fas fa-cloud", // 晴间多云
-        "104": "fas fa-cloud", // 阴
-        "300": "fas fa-cloud-showers-heavy", // 阵雨
-        "301": "fas fa-cloud-showers-heavy", // 强阵雨
-        "305": "fas fa-cloud-rain", // 小雨
-        "306": "fas fa-cloud-rain", // 中雨
-        "307": "fas fa-cloud-showers-heavy", // 大雨
-        "400": "fas fa-snowflake", // 小雪
-        "401": "fas fa-snowflake", // 中雪
-        "402": "fas fa-snowflake", // 大雪
-        "501": "fas fa-smog", // 雾
-        // Add more mappings as needed
-    };
-
-    function updateWeatherUI(data) {
-        if (!data || !data.temp || !data.text) {
-            weatherDisplay.textContent = '天气未知';
-            weatherIcon.className = 'fas fa-question-circle';
-            return;
-        }
-        weatherDisplay.textContent = `${data.text} ${data.temp}°C`;
-        weatherIcon.className = weatherIconMap[data.icon] || 'fas fa-cloud'; // Default icon
-    }
-
-    async function getWeather(city) {
-        if (!weatherIcon || !weatherDisplay) return;
-        
-        weatherIcon.className = 'fas fa-spinner fa-spin';
-        weatherDisplay.textContent = '加载中...';
-
-        try {
-            const response = await fetch(`/api/weather?city=${encodeURIComponent(city)}`);
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-            }
-            const weatherData = await response.json();
-            updateWeatherUI(weatherData);
-        } catch (error) {
-            console.error("获取天气失败:", error);
-            weatherDisplay.textContent = "获取失败";
-            weatherIcon.className = 'fas fa-exclamation-triangle';
-        }
-    }
-
-    // =======================================================================
-    // ======================== MOCK VOICE COMMAND HANDLING ==================
-    // =======================================================================
-    /**
-     * Handles function calls returned by the NLU model.
-     * This is where you would integrate the weather function.
-     * @param {Array<object>} toolCalls - The array of tool calls from the API.
-     */
-    function handleToolCalls(toolCalls) {
-        if (!toolCalls || toolCalls.length === 0) {
-            console.log("没有工具调用需要处理。");
-            return;
-        }
-
-        for (const call of toolCalls) {
-            const functionName = call.function.name;
-            const args = JSON.parse(call.function.arguments);
-
-            console.log(`执行工具调用: ${functionName}，参数:`, args);
-
-            if (functionName === 'set_weather') {
-                if (args.city) {
-                    getWeather(args.city);
-                } else {
-                    console.error("调用 set_weather 缺少 city 参数");
-                }
-            }
-            // Add other function handlers here, e.g., for AC, music, etc.
-        }
-    }
-
-    // =======================================================================
-    // =========================== INITIALIZATION ============================
-    // =======================================================================
-    showView('main-content');
-    updateAllTempDisplays();
-
-    // Start clock and set date
-    updateTime();
-    formatDate();
-    setInterval(updateTime, 1000); // Update time every second
-    
-    // Initial weather fetch
-    getWeather('北京');
 });
