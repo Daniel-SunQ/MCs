@@ -633,4 +633,168 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // ================== 语音唤醒+指令识别+弹窗 ==================
+    (function() {
+        // 唤醒词
+        const WAKE_WORDS = ["小爱同学"];
+        // 录音时长（毫秒）
+        const RECORD_DURATION = 7000;
+        // 弹窗DOM
+        let voiceModal = null;
+        let recognition = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isListening = false;
+
+        // 创建弹窗
+        function showVoiceModal(status, extra) {
+            if (!voiceModal) {
+                voiceModal = document.createElement('div');
+                voiceModal.id = 'voice-modal';
+                voiceModal.style.position = 'fixed';
+                voiceModal.style.left = '50%';
+                voiceModal.style.top = '20%';
+                voiceModal.style.transform = 'translate(-50%, 0)';
+                voiceModal.style.background = 'rgba(30,34,40,0.95)';
+                voiceModal.style.color = '#fff';
+                voiceModal.style.padding = '32px 48px';
+                voiceModal.style.borderRadius = '18px';
+                voiceModal.style.boxShadow = '0 8px 32px rgba(0,0,0,0.25)';
+                voiceModal.style.zIndex = 9999;
+                voiceModal.style.fontSize = '1.3rem';
+                voiceModal.style.textAlign = 'center';
+                voiceModal.style.transition = 'opacity 0.3s';
+                document.body.appendChild(voiceModal);
+            }
+            let html = '';
+            if (status === 'wake') {
+                html = `<div style="font-size:2.5rem;">🟢</div><div style="margin:12px 0 8px;">唤醒成功</div><div>请说出您的指令...</div>`;
+            } else if (status === 'recording') {
+                html = `<div style="font-size:2.5rem;">🎤</div><div style="margin:12px 0 8px;">正在监听指令...</div><div>请在7秒内说完</div>`;
+            } else if (status === 'processing') {
+                html = `<div style="font-size:2.5rem;">⏳</div><div style="margin:12px 0 8px;">正在识别/处理...</div>`;
+            } else if (status === 'result') {
+                html = `<div style="font-size:2.5rem;">✅</div><div style="margin:12px 0 8px;">AI回复</div><div style="margin-bottom:10px;">${extra||''}</div><button id="close-voice-modal" style="margin-top:10px;padding:6px 18px;border:none;border-radius:8px;background:#4ecdc4;color:#fff;font-size:1rem;cursor:pointer;">关闭</button>`;
+            }
+            voiceModal.innerHTML = html;
+            voiceModal.style.opacity = 1;
+            if (status === 'result') {
+                document.getElementById('close-voice-modal').onclick = hideVoiceModal;
+            }
+        }
+        function hideVoiceModal() {
+            if (voiceModal) {
+                voiceModal.style.opacity = 0;
+                setTimeout(()=>{if(voiceModal)voiceModal.remove();voiceModal=null;}, 350);
+            }
+        }
+
+        // 唤醒监听
+        function startWakeWordRecognition() {
+            if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+                console.warn('当前浏览器不支持Web Speech API');
+                return;
+            }
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            recognition.lang = 'zh-CN';
+            recognition.continuous = true;
+            recognition.interimResults = false;
+            recognition.onresult = function(event) {
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        const text = event.results[i][0].transcript.trim();
+                        if (WAKE_WORDS.some(word => text.includes(word))) {
+                            recognition.stop();
+                            onWakeWordDetected();
+                            break;
+                        }
+                    }
+                }
+            };
+            recognition.onerror = function(e) {
+                // 自动重启监听
+                setTimeout(()=>recognition.start(), 1000);
+            };
+            recognition.onend = function() {
+                if (!isListening) setTimeout(()=>recognition.start(), 1000);
+            };
+            recognition.start();
+        }
+
+        // 唤醒后流程
+        function onWakeWordDetected() {
+            showVoiceModal('wake');
+            setTimeout(()=>{
+                showVoiceModal('recording');
+                startRecording();
+            }, 1000);
+        }
+
+        // 录音
+        function startRecording() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert('当前浏览器不支持麦克风录音');
+                return;
+            }
+            isListening = true;
+            audioChunks = [];
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                mediaRecorder.ondataavailable = e => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
+                mediaRecorder.onstop = () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    isListening = false;
+                    showVoiceModal('processing');
+                    sendAudioToBackend();
+                };
+                mediaRecorder.start();
+                setTimeout(() => {
+                    if (mediaRecorder && mediaRecorder.state === 'recording') {
+                        mediaRecorder.stop();
+                    }
+                }, RECORD_DURATION);
+            }).catch(err => {
+                alert('无法访问麦克风: ' + err.message);
+                hideVoiceModal();
+                isListening = false;
+                if (recognition) recognition.start();
+            });
+        }
+
+        // 上传音频到后端
+        function sendAudioToBackend() {
+            // webm转wav（后端vosk需要wav），用ffmpeg.js更好，这里用浏览器API简单兼容
+            // 方案1：直接上传webm，后端用ffmpeg-python转wav（推荐）
+            // 方案2：前端转wav（兼容性差）
+            // 这里采用方案1
+            const blob = new Blob(audioChunks, { type: 'audio/webm' });
+            const formData = new FormData();
+            formData.append('audio', blob, 'record.webm');
+            fetch('/api/voice/recognize', {
+                method: 'POST',
+                body: formData
+            }).then(res => res.json()).then(data => {
+                if (data.reply) {
+                    showVoiceModal('result', data.reply);
+                } else if (data.error) {
+                    showVoiceModal('result', '识别失败：' + data.error);
+                } else {
+                    showVoiceModal('result', '未识别到有效指令');
+                }
+                // 3秒后自动关闭弹窗并恢复唤醒监听
+                setTimeout(()=>{hideVoiceModal();if(recognition)recognition.start();}, 3000);
+            }).catch(err => {
+                showVoiceModal('result', '请求失败：' + err.message);
+                setTimeout(()=>{hideVoiceModal();if(recognition)recognition.start();}, 3000);
+            });
+        }
+
+        // 启动唤醒监听
+        window.addEventListener('DOMContentLoaded', startWakeWordRecognition);
+    })();
+    // ================== END ==================
 });
