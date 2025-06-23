@@ -19,6 +19,12 @@ import numpy as np
 import time
 import math
 import types
+import wave
+import tempfile
+from openai import OpenAI
+from vosk import Model, KaldiRecognizer
+import json as pyjson
+import subprocess
 
 # 启用 MPS 后备方案以处理不受支持的操作 (现在可以移除了，因为我们修复了根本原因)
 # os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
@@ -657,6 +663,133 @@ def get_lyrics(song_id):
         return jsonify({"lyrics": lyrics})
     except Exception as e:
         return jsonify({"error": f"读取歌词文件失败: {e}"}), 500
+
+# ========== 语音指令识别 + DeepSeek Function Calling ==========
+
+# 初始化vosk模型（只加载一次）
+VOSK_MODEL_PATH = "vosk-model-small-cn-0.22" if os.path.exists("vosk-model-small-cn-0.22") else "vosk-model-cn-0.22"
+vosk_model = None
+if os.path.exists(VOSK_MODEL_PATH):
+    vosk_model = Model(VOSK_MODEL_PATH)
+else:
+    print(f"[警告] 未找到Vosk模型文件夹: {VOSK_MODEL_PATH}")
+
+# DeepSeek API配置
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+
+# 示例工具（可根据实际扩展）
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Get weather of an location, the user shoud supply a location first.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "The city and state, e.g. San Francisco, CA",
+                    }
+                },
+                "required": ["location"]
+            },
+        }
+    },
+]
+
+# DeepSeek Function Calling
+client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
+
+def get_weather(location):
+    # 这里只做演示，实际可接入真实天气API
+
+    return "location: " + location + " 24℃"
+
+def call_deepseek(messages, tools=tools):
+    response = client.chat.completions.create(
+        model="deepseek-chat",
+        messages=messages,
+        tools=tools
+    )
+    return response.choices[0].message
+
+def webm_to_wav(webm_path, wav_path):
+    cmd = [
+        "ffmpeg", "-y", "-i", webm_path,
+        "-ar", "16000", "-ac", "1", "-f", "wav", wav_path
+    ]
+    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
+@app.route('/api/voice/recognize', methods=['POST'])
+def recognize_voice():
+    if 'audio' not in request.files:
+        return jsonify({"error": "No audio file uploaded."}), 400
+    audio_file = request.files['audio']
+
+    # 保存到临时webm文件
+    with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as tmp:
+        webm_path = tmp.name
+        audio_file.save(webm_path)
+
+    # 转码为wav
+    wav_path = webm_path.replace('.webm', '.wav')
+    try:
+        webm_to_wav(webm_path, wav_path)
+    except Exception as e:
+        os.remove(webm_path)
+        return jsonify({"error": f"ffmpeg转码失败: {e}"}), 500
+
+    # 用vosk识别
+    rec = KaldiRecognizer(vosk_model, 16000)
+    wf = wave.open(wav_path, "rb")
+    transcript = ""
+    while True:
+        data = wf.readframes(4000)
+        if len(data) == 0:
+            break
+        if rec.AcceptWaveform(data):
+            res = pyjson.loads(rec.Result())
+            transcript += res.get("text", "")
+    res = pyjson.loads(rec.FinalResult())
+    transcript += res.get("text", "")
+    wf.close()
+    os.remove(webm_path)
+    os.remove(wav_path)
+
+    if not transcript.strip():
+        return jsonify({"error": "未识别到有效语音指令。", "transcript": ""}), 200
+
+    # Function Calling主流程
+    messages = [{"role": "user", "content": transcript}]
+    try:
+        message = call_deepseek(messages)
+        # 检查是否有 tool_calls
+        if hasattr(message, "tool_calls") and message.tool_calls:
+            for tool_call in message.tool_calls:
+                if tool_call.function.name == "get_weather":
+                    # 解析参数
+                    args = pyjson.loads(tool_call.function.arguments)
+                    location = args.get("location", "未知")
+                    tool_result = get_weather(location)
+                    # 追加 tool 响应
+
+                    messages.append(message)
+                    messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": tool_result})
+            print("messages after append tool result:", messages)        
+            # 再次请求，获得最终回复
+            message2 = call_deepseek(messages)
+            final_reply = message2.content
+            print("final_reply:", final_reply)
+        else:
+            final_reply = getattr(message, 'content', str(message))
+            print("[DeepSeek no tool_call, reply]", final_reply)
+    except Exception as e:
+        print("[DeepSeek Exception]", e)
+        return jsonify({"error": f"DeepSeek调用失败: {e}", "transcript": transcript}), 500
+
+    return jsonify({"transcript": transcript, "reply": final_reply})
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5001)
