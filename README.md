@@ -1,201 +1,125 @@
 # 智能车机系统
 
-一个基于Web的现代化车机系统，提供完整的车载功能管理和控制界面。
+一个基于 Flask + 前端现代化技术的智能车机系统，支持车辆状态、空调、多媒体、导航、语音控制、自动驾驶、疲劳监测、防碰撞检测等功能。
 
-## 功能特性
+---
 
-### 🚗 主要功能模块
+## 主要功能
 
-1. **车辆状态监控**
-   - 实时速度显示
-   - 油量/电量监控
-   - 发动机状态
-   - 胎压监测
-   - 里程表显示
+- 车辆状态监控
+- 空调控制
+- 多媒体娱乐（本地音乐播放、歌词显示）
+- 导航与地图
+- 车载应用扩展
+- 系统设置
+- 语音控制
+- 自动驾驶状态
+- 疲劳监测
+- **防碰撞检测（基于深度估计，独立页面展示）**
 
-2. **空调控制系统**
-   - 温度调节（16-30°C）
-   - 风速控制（1-5档）
-   - 模式选择（自动/制冷/制热）
-   - 除霜功能
-   - 内循环控制
+---
 
-3. **多媒体娱乐**
-   - 音乐播放控制
-   - 音量调节
-   - 音源切换（收音机/蓝牙/USB）
-   - 播放列表管理
+## 技术栈
 
-4. **导航系统**
-   - 目的地设置
-   - 路线规划
-   - 实时导航信息
-   - ETA和距离显示
+- **后端**：Python 3.8+，Flask，Flask-CORS
+- **深度估计**：PyTorch，transformers，timm，opencv-python-headless
+- **前端**：HTML5，CSS3，JavaScript (ES6+)，Font Awesome
 
-5. **车载应用**
-   - 电话功能
-   - 消息应用
-   - 日历管理
-   - 天气信息
-   - 摄像头查看
-   - 游戏娱乐
+---
 
-6. **系统设置**
-   - 显示设置（亮度/主题）
-   - 声音设置
-   - 连接管理（WiFi/蓝牙）
+## 安装与运行
 
-### 🎤 语音控制
+### 1. 克隆项目
 
-- 支持语音命令识别
-- 语音控制空调、音乐、导航等功能
-- 实时语音状态显示
+```bash
+git clone <repository-url>
+cd driving_stystem
+```
 
-### 🤖 自动驾驶
+### 2. 安装依赖
 
-- 自动驾驶状态监控
-- 自动驾驶级别显示
-- 状态指示器
+```bash
+pip install -r requirements.txt
+```
 
-## 技术架构
+### 3. 运行服务
 
-### 后端技术栈
-- **Python 3.8+**
-- **Flask** - Web框架
-- **Flask-CORS** - 跨域支持
+```bash
+python app.py
+```
 
-### 前端技术栈
-- **HTML5** - 页面结构
-- **CSS3** - 现代化样式设计
-- **JavaScript (ES6+)** - 交互逻辑
-- **Font Awesome** - 图标库
+### 4. 访问系统
 
-### 设计特点
-- **响应式设计** - 适配不同屏幕尺寸
-- **现代化UI** - 深色主题，毛玻璃效果
-- **流畅动画** - 平滑的过渡效果
-- **直观交互** - 简洁易用的操作界面
+- 主界面：[http://localhost:5000](http://localhost:5000)
+- 防碰撞检测独立页面：[http://localhost:5000/collision_detection_page](http://localhost:5000/collision_detection_page)
 
-## 安装和运行
+---
 
-### 环境要求
-- Python 3.8 或更高版本
-- 现代浏览器（Chrome、Firefox、Safari、Edge）
+## 防碰撞检测功能说明
 
-### 安装步骤
+- 该功能基于 Depth Anything V2 Small 模型，利用摄像头实时深度估计，结果以伪彩色图像流形式展示。
+- **Mac 用户优化**：已针对 Apple Silicon (M1/M2/M3) 进行深度优化，自动使用 MPS 加速，并修复了 PyTorch MPS 插值兼容性问题。
+- **性能建议**：如需更高帧率，可进一步降低摄像头分辨率，或在高性能 GPU 设备上运行。
 
-1. **克隆项目**
-   ```bash
-   git clone <repository-url>
-   cd driving_stystem
-   ```
+---
 
-2. **安装依赖**
-   ```bash
-   pip install -r requirements.txt
-   ```
+## 必要的本地/未上传文件说明
 
-3. **运行应用**
-   ```bash
-   python app.py
-   ```
+> ⚠️ 下列文件/文件夹因体积或隐私原因未纳入版本控制（.gitignore），请根据实际需求自行准备：
 
-4. **访问系统**
-   打开浏览器访问 `http://localhost:5000`
+- `.env`  
+  用于存放API密钥等敏感信息。示例内容：
+  ```
+  QWEATHER_API_KEY=你的和风天气API密钥
+  AMAP_API_KEY=你的高德地图API密钥
+  AMAP_SECURITY_SECRET=你的高德安全密钥
+  ```
+- `vosk-model-cn-0.22/`、`vosk-model-small-cn-0.22/`  
+  语音识别模型文件夹，需从 [Vosk 官方](https://alphacephei.com/vosk/models) 下载中文模型并解压到项目根目录。
+- `static/music/`  
+  本地音乐与歌词文件夹。可自行添加 `.mp3` 和对应 `.lrc` 歌词文件。
+- 其他 `.DS_Store`、缓存、临时文件等。
 
-## 使用说明
-
-### 基本操作
-- **点击功能卡片** - 进入对应功能模块
-- **返回按钮** - 返回主界面
-- **语音控制按钮** - 开启/关闭语音控制
-
-### 快捷键
-- **ESC** - 返回主界面
-- **空格键** - 切换语音控制
-- **数字键 1-6** - 快速访问功能模块
-
-### 语音命令示例
-- "空调温度调高" - 提高空调温度
-- "播放音乐" - 开始播放音乐
-- "开启导航" - 进入导航模块
-- "启动自动驾驶" - 启用自动驾驶
+---
 
 ## 项目结构
 
 ```
 driving_stystem/
-├── app.py                 # Flask主应用
-├── requirements.txt       # Python依赖
-├── README.md             # 项目说明
+├── app.py
+├── requirements.txt
+├── README.md
 ├── templates/
-│   └── index.html        # 主页面模板
-└── static/
-    ├── css/
-    │   └── style.css     # 样式文件
-    ├── js/
-    │   └── main.js       # JavaScript逻辑
-    └── images/           # 图片资源
+│   ├── index.html
+│   └── collision_page.html
+├── static/
+│   ├── css/
+│   ├── js/
+│   ├── images/
+│   └── music/
+├── vosk-model-cn-0.22/         # (未上传，需手动下载)
+├── vosk-model-small-cn-0.22/   # (未上传，需手动下载)
+└── .env                        # (未上传，需手动创建)
 ```
-
-## API接口
-
-### 车辆状态
-- `GET /api/vehicle/status` - 获取车辆状态
-- `POST /api/vehicle/status` - 更新车辆状态
-
-### 空调控制
-- `GET /api/ac/status` - 获取空调状态
-- `POST /api/ac/status` - 更新空调设置
-
-### 多媒体
-- `GET /api/media/status` - 获取多媒体状态
-- `POST /api/media/status` - 更新多媒体设置
-
-### 导航
-- `GET /api/navigation/status` - 获取导航状态
-- `POST /api/navigation/status` - 更新导航信息
-
-### 自动驾驶
-- `GET /api/autopilot/status` - 获取自动驾驶状态
-- `POST /api/autopilot/status` - 更新自动驾驶设置
-
-### 语音控制
-- `GET /api/voice/status` - 获取语音状态
-- `POST /api/voice/listen` - 开始语音监听
-- `POST /api/voice/stop` - 停止语音监听
-- `POST /api/voice/command` - 处理语音命令
-
-## 开发说明
-
-### 扩展功能
-系统采用模块化设计，可以轻松添加新功能：
-
-1. 在 `app.py` 中添加新的API路由
-2. 在 `templates/index.html` 中添加对应的HTML模块
-3. 在 `static/css/style.css` 中添加样式
-4. 在 `static/js/main.js` 中添加交互逻辑
-
-### 自定义主题
-可以通过修改CSS变量来定制界面主题：
-- 主色调：`#4ecdc4`
-- 强调色：`#ff6b6b`
-- 背景渐变：`linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)`
-
-## 许可证
-
-本项目采用 MIT 许可证。
-
-## 贡献
-
-欢迎提交 Issue 和 Pull Request 来改进这个项目。
-
-## 联系方式
-
-如有问题或建议，请通过以下方式联系：
-- 提交 GitHub Issue
-- 发送邮件至项目维护者
 
 ---
 
-**注意**：这是一个演示项目，实际部署时需要根据具体需求进行安全性和功能性的完善。 
+## 常见问题
+
+- **模型/依赖下载慢**：建议使用国内镜像或提前下载好模型文件。
+- **摄像头无法打开**：请检查本地摄像头权限，或尝试更换设备。
+- **深度估计卡顿**：Mac 用户已做极致优化，若仍卡顿建议降低分辨率或使用更强显卡。
+
+---
+
+## 许可证
+
+MIT License
+
+---
+
+如有问题欢迎提交 Issue 或 PR，或通过邮箱联系维护者。
+
+---
+
+如需进一步定制或遇到特殊环境问题，欢迎随时咨询！ 
