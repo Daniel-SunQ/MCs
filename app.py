@@ -122,33 +122,28 @@ def initialize_resources():
     if model is None:
         print("Initializing Depth Anything V2 model...")
         try:
-            # 检查并设置最佳设备和数据类型
             if torch.backends.mps.is_available():
                 device = torch.device("mps")
-                torch_dtype = torch.float16  # 在 MPS 上使用半精度以获得最佳性能
+                torch_dtype = torch.float16
             elif torch.cuda.is_available():
                 device = torch.device("cuda")
-                torch_dtype = torch.float16  # 在现代NVIDIA GPU上同样适用
+                torch_dtype = torch.float32  # CUDA 下强制 float32，避免 float16 报错
             else:
                 device = torch.device("cpu")
-                torch_dtype = torch.float32 # CPU 使用全精度
+                torch_dtype = torch.float32
 
             print(f"Using device: {device} with dtype: {torch_dtype}")
-            
             model_name = "depth-anything/Depth-Anything-V2-Small-hf"
             image_processor = AutoImageProcessor.from_pretrained(model_name)
-            # 以优化的方式加载模型
             model = AutoModelForDepthEstimation.from_pretrained(
                 model_name,
                 torch_dtype=torch_dtype,
-                low_cpu_mem_usage=True  # 优化低内存使用
+                low_cpu_mem_usage=True
             ).to(device)
 
             # --- 针对 MPS 的猴子补丁 ---
-            # 用我们的 bilinear 版本替换有问题的 bicubic 插值函数
             if device.type == 'mps':
                 print("Applying monkey-patch for MPS compatibility.")
-                # Dinov2 model is nested inside the DepthAnything model
                 target_object = model.backbone.embeddings
                 target_object.interpolate_pos_encoding = types.MethodType(
                     new_interpolate_pos_encoding, target_object
@@ -201,9 +196,25 @@ def generate_collision_frames():
         else:
             # 1. 预处理图像
             image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-            inputs = image_processor(images=image, return_tensors="pt").to(device)
-            # 确保输入张量的数据类型与模型匹配
-            inputs['pixel_values'] = inputs['pixel_values'].to(model.dtype)
+            inputs = image_processor(images=image, return_tensors="pt")
+            # 先全部转到 device
+            inputs = {k: v.to(device) for k, v in inputs.items()}
+            # 针对不同 device 类型处理 dtype
+            if "pixel_values" in inputs:
+                try:
+                    if model is not None and not isinstance(model, str) and device is not None:
+                        if hasattr(device, 'type') and device.type == 'mps':
+                            if hasattr(model, 'dtype'):
+                                inputs["pixel_values"] = inputs["pixel_values"].to(model.dtype)
+                        elif hasattr(device, 'type') and device.type == 'cuda':
+                            inputs["pixel_values"] = inputs["pixel_values"].to(torch.float32)
+                        else:
+                            inputs["pixel_values"] = inputs["pixel_values"].to(torch.float32)
+                except Exception as e:
+                    print(f"[pixel_values] .to(dtype) failed: {e}")
+            # 打印 dtype 以便调试
+            # print("model.dtype:", getattr(model, 'dtype', None))
+            # print("inputs['pixel_values'].dtype:", inputs['pixel_values'].dtype)
 
             # 2. 模型推理
             with torch.no_grad():
