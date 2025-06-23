@@ -449,53 +449,70 @@ document.addEventListener('DOMContentLoaded', () => {
     // ======================== UI Switching Logic (UNIFIED) =================
     // =======================================================================
 
+    // Store the original display style for the main content
+    const mainContentOriginalDisplay = window.getComputedStyle(mainContent).display;
+
     function showView(viewId) {
-        // Hide all major views first
+        // --- HIDE ALL ---
         mainContent.style.display = 'none';
         appDrawer.style.display = 'none';
-        modules.forEach(m => m.style.display = 'none');
+        modules.forEach(m => {
+            m.style.display = 'none';
+        });
 
-        const viewToShow = document.getElementById(viewId);
-        if (viewToShow) {
-            const displayStyle = viewId === 'app-drawer' ? 'grid' : 'flex';
-            viewToShow.style.display = displayStyle;
-            
-            if (viewId === 'map-module') {
-                initMap();
-            } else if (viewId === 'media-module') {
-                // Initialize music player only when the module is shown for the first time
-                if (!window.musicPlayerInitialized) {
+        // --- SHOW TARGET ---
+        if (viewId === 'main') {
+            mainContent.style.display = mainContentOriginalDisplay;
+        } else if (viewId === 'drawer') {
+            appDrawer.style.display = 'grid'; // app-drawer uses grid
+        } else {
+            const targetModule = document.getElementById(viewId);
+            if (targetModule) {
+                // Modules use 'flex' or 'block' based on their content, let's use a robust approach
+                // Most of our modules are designed as flex containers
+                targetModule.style.display = 'flex'; 
+
+                // --- POST-SWITCH LOGIC for specific modules ---
+                if (viewId === 'map-module') {
+                    initMap(); // initMap needs to be called when map is visible
+                } else if (viewId === 'media-module' && !window.musicPlayerInitialized) {
                     initMusicPlayer();
                     window.musicPlayerInitialized = true;
                 }
+            } else {
+                // Fallback to main content if ID is not found
+                mainContent.style.display = mainContentOriginalDisplay;
             }
-        } else {
-            // Default to main content if viewId is null or not found
-            mainContent.style.display = 'flex';
         }
     }
 
-    // --- Event Listener Binding ---
-    appDockIcon.addEventListener('click', () => showView('app-drawer'));
-    
-    closeModuleBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
-             showView('main-content'); // Always go back to main screen
-        });
-    });
+    // --- Event Listeners for Switching ---
 
+    // Open App Drawer from Dock
+    if (appDockIcon) {
+        appDockIcon.addEventListener('click', () => showView('drawer'));
+    }
+
+    // Open specific modules from App Drawer cards
     functionCards.forEach(card => {
         card.addEventListener('click', () => {
-            const targetViewId = card.getAttribute('data-target');
-            if (targetViewId) showView(targetViewId);
+            const target = card.getAttribute('data-target');
+            if (target) showView(target);
         });
     });
 
-    // --- Unify Dock Buttons to use the same showView logic ---
+    // Close any open module / drawer to go back to the main view
+    closeModuleBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showView('main');
+        });
+    });
+
+    // --- Direct Dock Button Listeners ---
     if (acDockButton) acDockButton.addEventListener('click', () => showView('ac-module'));
     if (settingsDockButton) settingsDockButton.addEventListener('click', () => showView('settings-module'));
     if (mapDockButton) mapDockButton.addEventListener('click', () => showView('map-module'));
-    if (mediaDockWidget) mediaDockWidget.addEventListener('click', () => showView('media-module'));
 
     // =======================================================================
     // ======================== MAP & NAVIGATION LOGIC =======================
