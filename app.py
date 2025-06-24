@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, Response
+from flask import Flask, render_template, jsonify, request, Response, stream_with_context   
 from flask_cors import CORS
 import json
 import os
@@ -25,6 +25,10 @@ from openai import OpenAI
 from vosk import Model, KaldiRecognizer
 import json as pyjson
 import subprocess
+import edge_tts
+import asyncio
+from playsound import playsound
+from ollama import ChatResponse, chat
 
 # 启用 MPS 后备方案以处理不受支持的操作 (现在可以移除了，因为我们修复了根本原因)
 # os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
@@ -664,7 +668,7 @@ def get_lyrics(song_id):
     except Exception as e:
         return jsonify({"error": f"读取歌词文件失败: {e}"}), 500
 
-# ========== 语音指令识别 + DeepSeek Function Calling ==========
+# ========== 语音指令识别 + local llama Function Calling ==========
 
 # 初始化vosk模型（只加载一次）
 VOSK_MODEL_PATH = "vosk-model-small-cn-0.22" if os.path.exists("vosk-model-small-cn-0.22") else "vosk-model-cn-0.22"
@@ -674,11 +678,11 @@ if os.path.exists(VOSK_MODEL_PATH):
 else:
     print(f"[警告] 未找到Vosk模型文件夹: {VOSK_MODEL_PATH}")
 
-# DeepSeek API配置
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
-# 示例工具（可根据实际扩展）
+def get_weather(location):
+    return f"摄氏度 : 20, 风速 : 10km/h, 湿度 : 50%"
+
+
 tools = [
     {
         "type": "function",
@@ -698,22 +702,23 @@ tools = [
         }
     },
 ]
+avaliable_functions = {
+    "get_weather": get_weather,
+}
 
-# DeepSeek Function Calling
-client = OpenAI(api_key=DEEPSEEK_API_KEY, base_url=DEEPSEEK_BASE_URL)
 
-def get_weather(location):
-    # 这里只做演示，实际可接入真实天气API
 
-    return "location: " + location + " 24℃"
-
-def call_deepseek(messages, tools=tools):
-    response = client.chat.completions.create(
-        model="deepseek-chat",
+def call_llama(messages, is_stream=False):
+    response: ChatResponse = chat(
+        'llama3.2:latest',
         messages=messages,
-        tools=tools
+        think=False,
+        tools=tools,
+        stream=is_stream,
     )
-    return response.choices[0].message
+    return response
+
+
 
 def webm_to_wav(webm_path, wav_path):
     cmd = [
@@ -721,6 +726,7 @@ def webm_to_wav(webm_path, wav_path):
         "-ar", "16000", "-ac", "1", "-f", "wav", wav_path
     ]
     subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
 
 @app.route('/api/voice/recognize', methods=['POST'])
 def recognize_voice():
@@ -759,37 +765,49 @@ def recognize_voice():
     os.remove(wav_path)
 
     if not transcript.strip():
-        return jsonify({"error": "未识别到有效语音指令。", "transcript": ""}), 200
+        def empty_stream():
+            yield f"data: {json.dumps({'error': '未识别到有效语音指令。', 'transcript': ''})}\n\n"
+        return Response(stream_with_context(empty_stream()), mimetype='text/event-stream')
 
-    # Function Calling主流程
+    
+
     messages = [{"role": "user", "content": transcript}]
+    print("users message:", messages)
+
+    end_sign = [',', '.', '!', '?', ':', ';', '。', '！', '？', '：', '；']
+
     try:
-        message = call_deepseek(messages)
+        response = call_llama(messages)
+        print("response:", response)
         # 检查是否有 tool_calls
-        if hasattr(message, "tool_calls") and message.tool_calls:
-            for tool_call in message.tool_calls:
-                if tool_call.function.name == "get_weather":
-                    # 解析参数
-                    args = pyjson.loads(tool_call.function.arguments)
-                    location = args.get("location", "未知")
-                    tool_result = get_weather(location)
-                    # 追加 tool 响应
-
-                    messages.append(message)
-                    messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": tool_result})
-            print("messages after append tool result:", messages)        
-            # 再次请求，获得最终回复
-            message2 = call_deepseek(messages)
-            final_reply = message2.content
-            print("final_reply:", final_reply)
+        if response.message.tool_calls:
+            for tool_call in response.message.tool_calls:
+                if functoin_to_call := avaliable_functions.get(tool_call.function.name):
+                    # print(f"calling {tool_call.function.name} with {tool_call.function.arguments}")
+                    result = functoin_to_call(tool_call.function.arguments)
+                    # print(f"result: {result}")
+                    messages.append(response.message)
+                    messages.append({"role": "tool", "name": tool_call.function.name, "content": str(result)})               
         else:
-            final_reply = getattr(message, 'content', str(message))
-            print("[DeepSeek no tool_call, reply]", final_reply)
-    except Exception as e:
-        print("[DeepSeek Exception]", e)
-        return jsonify({"error": f"DeepSeek调用失败: {e}", "transcript": transcript}), 500
+            print("[Llama no tool_call, reply]")
+        final_response = call_llama(messages, is_stream=True)
+        print("final_response:", final_response)
 
-    return jsonify({"transcript": transcript, "reply": final_reply})
+        def generate_stream():
+            sentence = ""
+            for chunk in final_response:
+                if chunk.message.content.endswith(tuple(end_sign)):
+                    sentence += chunk.message.content
+                    print(sentence, end="##", flush=True)
+                    yield f"data: {json.dumps({'text': sentence})}\n\n"
+                    sentence = ""
+                else:
+                    sentence += chunk.message.content    
+        return Response(stream_with_context(generate_stream()), mimetype='text/event-stream')
+    except Exception as e:
+        def error_stream():
+            yield f"data: {json.dumps({'error': f'Llama调用失败: {e}', 'transcript': transcript})}\n\n"
+        return Response(stream_with_context(error_stream()), mimetype='text/event-stream')
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5001)
