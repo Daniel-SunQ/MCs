@@ -61,6 +61,9 @@ python app.py
 - **Mac 用户优化**：已针对 Apple Silicon (M1/M2/M3) 进行深度优化，自动使用 MPS 加速，并修复了 PyTorch MPS 插值兼容性问题。
 - **性能建议**：如需更高帧率，可进一步降低摄像头分辨率，或在高性能 GPU 设备上运行。
 
+## 语音智能控制说明
+- 该功能基于 Llama 3.2 latest 模型，利用ollama本地部署，进行实时解析Vosk模型识别到的语音命令，调用Function calling，能够正确的调用多种Function，实现llm的agent功能。
+- **性能建议**：如需更加高效的模型，可以进一步增加LLM的体量。
 ---
 
 ## 必要的本地/未上传文件说明
@@ -78,6 +81,8 @@ python app.py
   语音识别模型文件夹，需从 [Vosk 官方](https://alphacephei.com/vosk/models) 下载中文模型并解压到项目根目录。
 - `static/music/`  
   本地音乐与歌词文件夹。可自行添加 `.mp3` 和对应 `.lrc` 歌词文件。
+- `depth_anything`模型需要自行添加到根目录。
+- `llama 3.2 latest`模型需要自行利用ollama进行配置。
 - 其他 `.DS_Store`、缓存、临时文件等。
 
 ---
@@ -99,6 +104,7 @@ driving_stystem/
 │   └── music/
 ├── vosk-model-cn-0.22/         # (未上传，需手动下载)
 ├── vosk-model-small-cn-0.22/   # (未上传，需手动下载)
+├── depth_anything.pth          # (未上传，需手动下载)
 └── .env                        # (未上传，需手动创建)
 ```
 
@@ -109,7 +115,7 @@ driving_stystem/
 - **模型/依赖下载慢**：建议使用国内镜像或提前下载好模型文件。
 - **摄像头无法打开**：请检查本地摄像头权限，或尝试更换设备。
 - **深度估计卡顿**：Mac 用户已做极致优化，若仍卡顿建议降低分辨率或使用更强显卡。
-
+- **语音响应较慢**：已经使用最优的队列算法进行语音分chunk生成逻辑，由于语音生成基于网络API，请尝试更强的网络速度。
 ---
 
 ## 许可证
