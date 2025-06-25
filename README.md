@@ -1,4 +1,4 @@
-##Mini Intelegent car multimode  interaction system
+## Mini Intelegent car multimode  interaction system
 
 本项目是一个基于Flask的智能车载多模态交互系统，集成了语音识别、深度学习视觉感知、车辆状态管理、多媒体娱乐、导航与自动驾驶等功能。系统支持自然语言语音控制，具备实时车辆信息展示、空调与多媒体控制、防碰撞检测等能力，旨在为智能汽车提供安全、便捷、智能的人机交互体验。
 
@@ -123,16 +123,16 @@ driving_stystem/
 
 ## 依赖说明
 
-###Python版本要求
+### Python版本要求
 - Python >= 3.8
 
-###核心依赖库
+### 核心依赖库
 - Web框架与扩展
 - Flask==2.3.3 - Web应用框架
 - Flask-CORS==4.0.0 - 跨域资源共享支持
 - Flask-SocketIO - 实时通信支持
 
-####深度学习与计算机视觉
+#### 深度学习与计算机视觉
 - torch==2.1.0 - PyTorch深度学习框架
 - torchvision==0.16.0 - 计算机视觉工具包
 - transformers==4.41.2 - Hugging Face模型库
@@ -140,34 +140,34 @@ driving_stystem/
 - opencv-python-headless==4.10.0.82 - 计算机视觉库
 - accelerate==0.31.0 - 模型加速库
 
-####语音识别与处理
+#### 语音识别与处理
 - vosk==0.3.44 - 离线语音识别
 - soundfile==0.12.1 - 音频文件处理
 - pvporcupine - 语音唤醒词检测
 - pvrecorder - 音频录制
 
-####多媒体处理
+#### 多媒体处理
 - mutagen==1.47.0 - 音频元数据处理
 - playsound - 音频播放
 
-####网络与API
+#### 网络与API
 - requests==2.31.0 - HTTP请求库
 - httpx==0.25.2 - 异步HTTP客户端
 - openai==1.3.0 - OpenAI API客户端
 - websockets==11.0.3 - WebSocket支持
 
-####其他工具
+#### 其他工具
 - python-dotenv==1.0.0 - 环境变量管理
 - numpy - 数值计算
 - PIL - 图像处理
 
-###系统要求
+### 系统要求
 - 支持摄像头设备（用于防碰撞检测）
 - 麦克风设备（用于语音识别）
 - 音频输出设备（用于语音播放）
 - 建议4GB以上内存（用于深度学习模型运行）
 
-##功能使用
+## 功能使用
 - 语音控制：点击语音按钮或使用唤醒词激活语音识别，支持中文语音指令。
 - 车辆状态查看：在主界面可实时查看车辆各项状态信息。
 - 空调控制：点击空调图标进入控制界面，可调节温度、风量等。
@@ -256,7 +256,7 @@ LLM do not have tool parameter
 - 检查Ollama是否正确运行
 - 当前大模型的能力较弱，无法进行正确的Function calling
 
-##开发指南
+## 开发指南
 
 非常欢迎社区用户参与本项目的开发与完善！如有兴趣贡献代码、文档或提出建议，请参考【开发指南】CONTRIBUTER.MD
 
