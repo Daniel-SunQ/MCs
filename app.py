@@ -295,12 +295,13 @@ def release_resources():
         print("Camera released.")
 
 
-# ======================================================================= */
-# ======================================================================= */
+
 # 在应用退出时注册清理函数
 import atexit
 atexit.register(release_resources)
 
+# ======================================================================= */
+# ======================================================================= */
 def scan_music_directory():
     """扫描音乐目录，提取元数据，构建播放列表"""
     playlist = []
@@ -850,7 +851,7 @@ def detect_wake_word():
     检测唤醒词。集成Porcupine唤醒词检测。
     返回True表示检测到唤醒词，否则返回False。
     """
-    access_key = "BXJIoQ3MMz5KygwO6hL+y67RS3q+wX/U4H1xCBe62sGtxOdR9NVBjA=="
+    access_key = os.getenv('PORCUPINE_ACCESS_KEY')
     porcupine = pvporcupine.create(access_key=access_key, keywords=["hey siri"])
     recorder = PvRecorder(device_index=0, frame_length=512)
     recorder.start()
