@@ -634,60 +634,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // ================== 语音唤醒+指令识别+弹窗 ==================
+    // ================== 语音弹窗+WebSocket监听 ==================
     (function() {
-        // 唤醒词
-        const WAKE_WORDS = ["小爱同学"];
-        // 录音时长（毫秒）
-        const RECORD_DURATION = 7000;
         // 弹窗DOM
         let voiceModal = null;
-        let recognition = null;
-        let mediaRecorder = null;
-        let audioChunks = [];
-        let isListening = false;
-
-        // TTS异步队列
-        let ttsQueue = [];
-        let ttsPlaying = false;
-        function speakTextAsync(text) {
-            if (!text) return;
-            ttsQueue.push(text);
-            console.log('[TTS] 入队:', text, '当前队列:', ttsQueue.slice());
-            playNextTTS();
-        }
-        function playNextTTS() {
-            if (ttsPlaying || ttsQueue.length === 0) {
-                console.log('[TTS] playNextTTS: ttsPlaying=', ttsPlaying, '队列长度=', ttsQueue.length);
-                // 如果队列空且没有在播报，说明TTS全部完成，可以恢复监听
-                if (!ttsPlaying && ttsQueue.length === 0) {
-                    if (!isListening) return; // 避免重复
-                    hideVoiceModal();
-                    isListening = false;
-                    console.log('[TTS] TTS全部完成，isListening = false，等待 recognition.onend 自动重启');
-                    // recognition.onend 会自动重启监听
-                }
-                return;
-            }
-            ttsPlaying = true;
-            const text = ttsQueue.shift();
-            console.log('[TTS] 开始朗读:', text);
-            const utter = new window.SpeechSynthesisUtterance(text);
-            utter.lang = 'zh-CN';
-            utter.onend = function() {
-                console.log('[TTS] 朗读完成:', text);
-                ttsPlaying = false;
-                playNextTTS();
-            };
-            utter.onerror = function(e) {
-                console.log('[TTS] 朗读出错:', text, e);
-                ttsPlaying = false;
-                playNextTTS();
-            };
-            window.speechSynthesis.speak(utter);
-        }
-
-        // 创建弹窗
         function showVoiceModal(status, extra) {
             if (!voiceModal) {
                 voiceModal = document.createElement('div');
@@ -709,13 +659,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             let html = '';
             if (status === 'wake') {
-                html = `<div style="font-size:2.5rem;">🟢</div><div style="margin:12px 0 8px;">唤醒成功</div><div>请说出您的指令...</div>`;
+                html = `<div style=\"font-size:2.5rem;\">🟢</div><div style=\"margin:12px 0 8px;\">唤醒成功</div><div>请说出您的指令...</div>`;
             } else if (status === 'recording') {
-                html = `<div style="font-size:2.5rem;">🎤</div><div style="margin:12px 0 8px;">正在监听指令...</div><div>请在7秒内说完</div>`;
+                html = `<div style=\"font-size:2.5rem;\">🎤</div><div style=\"margin:12px 0 8px;\">正在监听指令...</div><div>请在7秒内说完</div>`;
             } else if (status === 'processing') {
-                html = `<div style="font-size:2.5rem;">⏳</div><div style="margin:12px 0 8px;">正在识别/处理...</div>`;
+                html = `<div style=\"font-size:2.5rem;\">⏳</div><div style=\"margin:12px 0 8px;\">正在识别/处理...</div>`;
+            } else if (status === 'streaming') {
+                html = `<div style=\"font-size:2.5rem;\">⏳</div><div style=\"margin:12px 0 8px;\">正在播报...</div><div style=\"margin-bottom:10px;min-width:320px;max-width:480px;word-break:break-all;text-align:left;\">${extra||''}</div>`;
             } else if (status === 'result') {
-                html = `<div style="font-size:2.5rem;">✅</div><div style="margin:12px 0 8px;">AI回复</div><div style="margin-bottom:10px;">${extra||''}</div><button id="close-voice-modal" style="margin-top:10px;padding:6px 18px;border:none;border-radius:8px;background:#4ecdc4;color:#fff;font-size:1rem;cursor:pointer;">关闭</button>`;
+                html = `<div style=\"font-size:2.5rem;\">✅</div><div style=\"margin:12px 0 8px;\">AI回复</div><div style=\"margin-bottom:10px;\">${extra||''}</div><button id=\"close-voice-modal\" style=\"margin-top:10px;padding:6px 18px;border:none;border-radius:8px;background:#4ecdc4;color:#fff;font-size:1rem;cursor:pointer;\">关闭</button>`;
             }
             voiceModal.innerHTML = html;
             voiceModal.style.opacity = 1;
@@ -729,195 +681,54 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(()=>{if(voiceModal)voiceModal.remove();voiceModal=null;}, 350);
             }
         }
-
-        // 唤醒监听
-        function startWakeWordRecognition() {
-            if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-                console.warn('当前浏览器不支持Web Speech API');
-                return;
-            }
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            recognition = new SpeechRecognition();
-            recognition.lang = 'zh-CN';
-            recognition.continuous = true;
-            recognition.interimResults = true;  // 启用实时结果
-            recognition.maxAlternatives = 1;
-            
-            recognition.onresult = function(event) {
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    const transcript = event.results[i][0].transcript.trim();
-                    console.log('[唤醒监听] 识别到内容:', transcript);
-                    // 检查实时结果和最终结果
-                    if (WAKE_WORDS.some(word => transcript.includes(word))) {
-                        console.log('[唤醒监听] 检测到唤醒词，停止recognition');
-                        recognition.stop();
-                        onWakeWordDetected();
-                        break;
-                    }
-                }
-            };
-            recognition.onerror = function(e) {
-                console.log('[recognition.onerror] 语音识别错误:', e.error);
-                // 自动重启监听
-                setTimeout(()=>{
-                    try { 
-                        console.log('[recognition.onerror] 尝试重启recognition');
-                        recognition.start(); 
-                    } catch (err) { console.log('[recognition.onerror] 重启失败:', err); }
-                }, 1000);
-            };
-            recognition.onend = function() {
-                console.log('[recognition.onend] recognition已结束，isListening=', isListening);
-                if (!isListening) {
-                    setTimeout(()=>{
-                        try { 
-                            console.log('[recognition.onend] 尝试重启recognition');
-                            recognition.start(); 
-                        } catch (err) { console.log('[recognition.onend] 重启失败:', err); }
-                    }, 1000);
-                }
-            };
-            console.log('[唤醒监听] recognition.start()');
-            recognition.start();
-        }
-
-        // 唤醒后流程
-        function onWakeWordDetected() {
-            // const voice = new Audio('./static/voice/hello.mp3');
-            // voice.play();
-            console.log('[onWakeWordDetected] 唤醒成功，弹窗切换到wake -> recording');
-            showVoiceModal('wake');
-            setTimeout(()=>{
+        // WebSocket监听
+        const socket = io.connect('http://localhost:5001');
+        let streamingText = '';
+        
+        socket.on('voice_status', function(data) {
+            if (data.status === 'wake') {
+                showVoiceModal('wake');
+            } else if (data.status === 'recording') {
                 showVoiceModal('recording');
-                startRecording();
-            }, 700);  // 减少到700ms
-        }
-
-        // 录音
-        function startRecording() {
-            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                alert('当前浏览器不支持麦克风录音');
-                return;
+            } else if (data.status === 'processing') {
+                showVoiceModal('processing');
+            } else if (data.status === 'streaming') {
+                streamTextToModal(data.text || '', data.duration);
             }
-            isListening = true;
-            console.log('[startRecording] isListening = true');
-            audioChunks = [];
-            
-            // 尝试使用更高效的音频格式
-            const audioOptions = {
-                audio: {
-                    sampleRate: 16000,  // 降低采样率
-                    channelCount: 1,    // 单声道
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                }
-            };
-            
-            navigator.mediaDevices.getUserMedia(audioOptions).then(stream => {
-                // 优先使用更小的音频格式
-                const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-                    ? 'audio/webm;codecs=opus' 
-                    : 'audio/webm';
-                    
-                mediaRecorder = new MediaRecorder(stream, { 
-                    mimeType: mimeType,
-                    audioBitsPerSecond: 16000  // 降低比特率
-                });
-                mediaRecorder.ondataavailable = e => {
-                    if (e.data.size > 0) audioChunks.push(e.data);
-                };
-                mediaRecorder.onstop = () => {
-                    stream.getTracks().forEach(track => track.stop());
-                    isListening = false;
-                    console.log('[mediaRecorder.onstop] isListening = false');
-                    showVoiceModal('processing');
-                    sendAudioToBackend();
-                };
-                mediaRecorder.start();
-                console.log('[startRecording] mediaRecorder.start()');
-                setTimeout(() => {
-                    if (mediaRecorder && mediaRecorder.state === 'recording') {
-                        console.log('[startRecording] 到达录音时长，mediaRecorder.stop()');
-                        mediaRecorder.stop();
-                    }
-                }, RECORD_DURATION);
-            }).catch(err => {
-                alert('无法访问麦克风: ' + err.message);
-                hideVoiceModal();
-                isListening = false;
-                console.log('[startRecording] getUserMedia失败，isListening = false');
-                if (recognition) recognition.start();
-            });
+            else if (data.status === 'result') {
+                // 流式输出文字（逐字显示）
+                showVoiceModal('result', data.text);
+            }
+        });
+        function countValidChars(str) {
+            // 只保留汉字、英文字母、数字
+            return (str.replace(/[，。！？、,.!?:;；“”‘’\"'\\[\\]（）()\\s]/g, '')).length;
         }
-
-        // 上传音频到后端
-        function sendAudioToBackend() {
-            const startTime = Date.now();
-            const blob = new Blob(audioChunks, { type: 'audio/webm' });
-            const formData = new FormData();
-            formData.append('audio', blob, 'record.webm');
-
-            // 先显示处理中的弹窗
-            showVoiceModal('processing');
-            console.log('[sendAudioToBackend] 开始上传音频到后端');
-
-            fetch('/api/voice/recognize', {
-                method: 'POST',
-                body: formData
-            }).then(response => {
-                if (!response.body) throw new Error('No response body');
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder('utf-8');
-                let buffer = '';
-                let allText = '';
-
-                function processLine(line) {
-                    if (!line.trim().startsWith('data:')) return;
-                    try {
-                        const json = JSON.parse(line.replace(/^data:\s*/, ''));
-                        if (json.text || json.sentence) {
-                            const text = json.text || json.sentence;
-                            allText += text;
-                            // 实时显示
-                            showVoiceModal('result', allText);
-                            speakTextAsync(text);
-                            console.log('[sendAudioToBackend] 收到AI回复chunk:', text);
-                        } else if (json.error) {
-                            showVoiceModal('result', '识别失败：' + json.error);
-                            console.log('[sendAudioToBackend] 收到AI错误:', json.error);
-                        }
-                    } catch (e) {
-                        // 忽略解析失败
-                    }
+        // 流式输出函数
+        function streamTextToModal(fullText, duration) {
+            let idx = 0;
+            let current = '';
+            // 计算有效字数
+            const validCharCount = countValidChars(fullText);
+            // 打印音频时长和有效字数
+            console.log('音频时长（秒）:', duration);
+            console.log('有效字数:', validCharCount);
+            let intervalTime = 50;
+            if (duration && validCharCount > 0) {
+                intervalTime = Math.max(30, Math.floor(duration * 1000 / validCharCount));
+            }
+            showVoiceModal('streaming', '');
+            const interval = setInterval(() => {
+                if (idx < fullText.length) {
+                    current += fullText[idx];
+                    showVoiceModal('streaming', current);
+                    idx++;
+                } else {
+                    clearInterval(interval);
+                    // 输出完毕，显示关闭按钮
+                    showVoiceModal('result', fullText);
                 }
-
-                function read() {
-                    reader.read().then(({ done, value }) => {
-                        if (done) {
-                            console.log('[sendAudioToBackend] 识别流程结束，等待TTS全部完成后自动恢复监听');
-                            // 不再主动 hideVoiceModal/isListening/recognition.start
-                            return;
-                        }
-                        buffer += decoder.decode(value, { stream: true });
-                        // SSE每条以\n\n分隔
-                        let lines = buffer.split('\n\n');
-                        buffer = lines.pop(); // 剩下的留给下次
-                        lines.forEach(processLine);
-                        read();
-                    });
-                }
-                read();
-            }).catch(err => {
-                const totalTime = Date.now() - startTime;
-                console.log(`[sendAudioToBackend] 语音识别失败，耗时: ${totalTime}ms`);
-                // 失败时也等待TTS全部完成后自动恢复监听
-                showVoiceModal('result', '请求失败：' + err.message);
-            });
+            }, intervalTime); // 50ms一个字，可根据实际体验调整
         }
-
-        // 启动唤醒监听
-        window.addEventListener('DOMContentLoaded', startWakeWordRecognition);
     })();
-    // ================== END ==================
 });

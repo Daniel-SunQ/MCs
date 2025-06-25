@@ -29,6 +29,20 @@ import edge_tts
 import asyncio
 from playsound import playsound
 from ollama import ChatResponse, chat
+import requests
+from flask_socketio import SocketIO, emit
+import threading
+import queue
+import pvporcupine
+from pvrecorder import PvRecorder
+import struct
+from datetime import datetime
+
+import sounddevice as sd
+from scipy.io.wavfile import write
+
+
+
 
 # 启用 MPS 后备方案以处理不受支持的操作 (现在可以移除了，因为我们修复了根本原因)
 # os.environ['PYTORCH_ENABLE_MPS_FALLBACK'] = '1'
@@ -37,6 +51,7 @@ load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # 模拟车辆状态数据
 vehicle_status = {
@@ -81,6 +96,9 @@ autopilot_status = {"enabled": False, "level": "L2", "status": "待机"}
 # 模拟语音控制状态
 voice_status = {"listening": False, "last_command": "无"}
 
+# ======================================================================= */
+# =========================== DEPTH ANYTHING V2 ========================== */
+# ======================================================================= */
 # 全局变量来缓存模型和摄像头
 camera = None
 image_processor = None
@@ -134,7 +152,7 @@ def initialize_resources():
         try:
             if torch.backends.mps.is_available():
                 device = torch.device("mps")
-                torch_dtype = torch.float16
+                torch_dtype = torch.float32  # 统一为float32，避免float和half混用
             elif torch.cuda.is_available():
                 device = torch.device("cuda")
                 torch_dtype = torch.float32  # CUDA 下强制 float32，避免 float16 报错
@@ -213,13 +231,7 @@ def generate_collision_frames():
             if "pixel_values" in inputs:
                 try:
                     if model is not None and not isinstance(model, str) and device is not None:
-                        if hasattr(device, 'type') and device.type == 'mps':
-                            if hasattr(model, 'dtype'):
-                                inputs["pixel_values"] = inputs["pixel_values"].to(model.dtype)
-                        elif hasattr(device, 'type') and device.type == 'cuda':
-                            inputs["pixel_values"] = inputs["pixel_values"].to(torch.float32)
-                        else:
-                            inputs["pixel_values"] = inputs["pixel_values"].to(torch.float32)
+                        inputs["pixel_values"] = inputs["pixel_values"].to(torch.float32)
                 except Exception as e:
                     print(f"[pixel_values] .to(dtype) failed: {e}")
             # 打印 dtype 以便调试
@@ -282,6 +294,9 @@ def release_resources():
         camera = None
         print("Camera released.")
 
+
+# ======================================================================= */
+# ======================================================================= */
 # 在应用退出时注册清理函数
 import atexit
 atexit.register(release_resources)
@@ -416,32 +431,6 @@ def get_voice_status():
     return jsonify(voice_status)
 
 
-@app.route("/api/voice/command", methods=["POST"])
-def voice_command():
-    global voice_status
-    data = request.json
-    command = data.get("command", "")
-    voice_status["last_command"] = command
-    voice_status["listening"] = False
-
-    # 简单的语音命令处理逻辑
-    response = {"status": "success", "message": f"收到命令: {command}"}
-
-    if "空调" in command:
-        if "温度" in command:
-            response["action"] = "ac_temperature"
-        elif "风速" in command:
-            response["action"] = "ac_fan"
-    elif "音乐" in command or "播放" in command:
-        response["action"] = "media_play"
-    elif "导航" in command:
-        response["action"] = "navigation"
-    elif "自动驾驶" in command:
-        response["action"] = "autopilot"
-
-    return jsonify(response)
-
-
 @app.route("/api/voice/listen", methods=["POST"])
 def start_voice_listening():
     global voice_status
@@ -465,7 +454,7 @@ def get_config():
     })
 
 
-#weather interface
+#weather interface for quick view
 @app.route('/api/weather')
 def get_weather():
     city_name = request.args.get('city')
@@ -667,8 +656,10 @@ def get_lyrics(song_id):
         return jsonify({"lyrics": lyrics})
     except Exception as e:
         return jsonify({"error": f"读取歌词文件失败: {e}"}), 500
-
-# ========== 语音指令识别 + local llama Function Calling ==========
+    
+# ======================================================================= */
+# =========================== VOICE COMMAND RECOGNITION ================== */
+# ======================================================================= */
 
 # 初始化vosk模型（只加载一次）
 VOSK_MODEL_PATH = "vosk-model-small-cn-0.22" if os.path.exists("vosk-model-small-cn-0.22") else "vosk-model-cn-0.22"
@@ -679,38 +670,164 @@ else:
     print(f"[警告] 未找到Vosk模型文件夹: {VOSK_MODEL_PATH}")
 
 
-def get_weather(location):
-    return f"摄氏度 : 20, 风速 : 10km/h, 湿度 : 50%"
+#====================================================
+#==============functions_for_call_tool===============
 
+#===============weather_function===============
+url_api_weather = 'https://devapi.qweather.com/v7/weather/'
+url_api_geo = 'https://geoapi.qweather.com/v2/city/'
+url_api_rain = 'https://devapi.qweather.com/v7/minutely/5m'
+url_api_air = 'https://devapi.qweather.com/v7/air/now'
 
+def get_location_id(location):
+    try:
+        url = f"{url_api_geo}lookup?location={location}&range=cn&key={os.getenv('QWEATHER_API_KEY')}"
+        response = requests.get(url).json()
+        return response['location'][0]['id']
+    except Exception as e:
+        print(f"Error: {e}, return default location id")
+        #北京的location_id
+        return "101010100"              
+    # 默认返回第一个location的id
+    
+
+def get_now_weather(location):
+    location_id = get_location_id(location)
+    try:
+        url = f"{url_api_weather}now?location={location_id}&key={os.getenv('QWEATHER_API_KEY')}"
+        response = requests.get(url).json()
+        data = {
+            '温度': response['now']['temp'],
+            '湿度': response['now']['humidity'],
+            '风速': response['now']['windSpeed'],
+            '风向': response['now']['windDir'],
+            '天气': response['now']['text'],
+            '体感温度': response['now']['feelsLike'],
+            '气压': response['now']['pressure'],
+            '能见度': response['now']['vis'],
+        }
+    except Exception as e:
+        print(f"Error: {e}, return default now weather")
+        data = {
+            '温度': '20',
+            '湿度': '50',
+            '风速': '10',
+        }
+    return data
+
+def get_forecast_weather_by_date(date, location):
+    try:
+        location_id = get_location_id(location)
+        print(f"location: {location}")
+        print(f"date: {date}")
+        url = f"{url_api_weather}7d?location={location_id}&key={os.getenv('QWEATHER_API_KEY')}"
+        print(f"url: {url}")
+        reseponse = requests.get(url).json()['daily']
+        info = reseponse
+    except Exception as e:
+        print(f"Error: {e}, return default forecastweather")
+        return None
+    data = [ 
+        {
+            '日期': i['fxDate'],
+            '最高温度': i['tempMax'],
+            '最低温度': i['tempMin'],
+            '天气': i['textDay'],
+            '白天风向': i['windDirDay'],
+            '风速': i['windSpeedDay'],
+            '湿度': i['humidity'],
+            '紫外线强度': i['uvIndex'],
+            '能见度': i['vis'],
+        }
+        for i in info if i['fxDate'] == date
+        ]
+    return data
+
+#===============get_date=======================
+def get_date():
+    return datetime.now().strftime("%Y-%m-%d")
+
+#===============other_functions=======================
+##TODO: 添加其他函数，例如操控音乐，操控空调，或者操控导航等等
+## when you add new function, you should add the function to the tools and avaliable_functions
+## also, you should add the function to the tools_prompt
+
+#===========================================================
+#===============tools and avaliable_functions===============
+tools_prompt = {
+    "get_now_weather": "获取现在城市的天气，用户应该提供城市名",
+    "get_forecast_weather_by_date": "如果用户问你某一个城市未来某一天的天气，你应该返回该天的天气，用户应该提供日期和城市",
+    "get_date": "获取现在的时间"
+}
 tools = [
     {
-        "type": "function",
-        "function": {
-            "name": "get_weather",
-            "description": "Get weather of an location, the user shoud supply a location first.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "location": {
-                        "type": "string",
-                        "description": "The city and state, e.g. San Francisco, CA",
+        'type': 'function',
+        'function': {
+            'name': 'get_now_weather',
+            'description': tools_prompt['get_now_weather'],
+            'parameters': {
+                'type': 'object',
+                "properties":{
+                    'location':{
+                        'type': 'string',
+                        'description': '城市名称，必须是中国的标准城市名(必须是中文)，例如："长沙"、"重庆"等，不要填写商铺、品牌或其他非地名',
                     }
                 },
-                "required": ["location"]
+                'required': ['location'],
+                'additionalProperties': False,
+            },
+        }
+
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'get_forecast_weather_by_date',
+            'description': tools_prompt['get_forecast_weather_by_date'],
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'date': {
+                        'type': 'string',
+                        'description': '时间，格式为2025-MM-DD',
+                        'default': datetime.now().strftime("%Y-%m-%d")
+                    },
+                    'location': {
+                        'type': 'string',
+                        'description': '必须是中国的标准城市名(必须是中文)，例如："长沙"、"重庆"等，不要填写商铺、品牌或其他非地名',
+                        'default': '重庆'
+                    }
+                },
+                'required': ['location'],
+                'additionalProperties': False,
+            },
+        }
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'get_date',
+            'description': tools_prompt['get_date'],
+            'parameters': {
+                'type': 'object',
+                'properties': {},
+                'required': [],
+                'additionalProperties': False,
             },
         }
     },
 ]
+
 avaliable_functions = {
-    "get_weather": get_weather,
+    "get_now_weather": get_now_weather,
+    "get_forecast_weather_by_date": get_forecast_weather_by_date,
+    "get_date": get_date,
 }
 
-
-
+#===============call_llama===============
 def call_llama(messages, is_stream=False):
     response: ChatResponse = chat(
-        'llama3.2:latest',
+        'qwen3:1.7b',
         messages=messages,
         think=False,
         tools=tools,
@@ -718,36 +835,64 @@ def call_llama(messages, is_stream=False):
     )
     return response
 
+def call_llama_without_tool(messages, is_stream=False):
+    response: ChatResponse = chat(
+        'qwen3:1.7b',
+        messages=messages,
+        think=False,
+        stream=is_stream,
+    )
+    return response
 
-
-def webm_to_wav(webm_path, wav_path):
-    cmd = [
-        "ffmpeg", "-y", "-i", webm_path,
-        "-ar", "16000", "-ac", "1", "-f", "wav", wav_path
-    ]
-    subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-
-
-@app.route('/api/voice/recognize', methods=['POST'])
-def recognize_voice():
-    if 'audio' not in request.files:
-        return jsonify({"error": "No audio file uploaded."}), 400
-    audio_file = request.files['audio']
-
-    # 保存到临时webm文件
-    with tempfile.NamedTemporaryFile(suffix='.webm', delete=False) as tmp:
-        webm_path = tmp.name
-        audio_file.save(webm_path)
-
-    # 转码为wav
-    wav_path = webm_path.replace('.webm', '.wav')
+# 唤醒词检测函数
+def detect_wake_word():
+    """
+    检测唤醒词。集成Porcupine唤醒词检测。
+    返回True表示检测到唤醒词，否则返回False。
+    """
+    access_key = "BXJIoQ3MMz5KygwO6hL+y67RS3q+wX/U4H1xCBe62sGtxOdR9NVBjA=="
+    porcupine = pvporcupine.create(access_key=access_key, keywords=["hey siri"])
+    recorder = PvRecorder(device_index=0, frame_length=512)
+    recorder.start()
     try:
-        webm_to_wav(webm_path, wav_path)
-    except Exception as e:
-        os.remove(webm_path)
-        return jsonify({"error": f"ffmpeg转码失败: {e}"}), 500
+        while True:
+            pcm = recorder.read()
+            result = porcupine.process(pcm)
+            if result >= 0:
+                print('detected')
+                break
+    finally:
+        try:
+            recorder.stop()
+        except Exception:
+            pass
+        try:
+            recorder.delete()
+        except Exception:
+            pass
+        try:
+            porcupine.delete()
+        except Exception:
+            pass
+    return True
 
-    # 用vosk识别
+def record_audio(duration=7, sample_rate=16000, channels=1):
+    """
+    使用sounddevice录音，返回临时wav文件路径。适配vosk识别。
+    """
+    print(f"[录音] 开始录音 {duration} 秒...")
+    recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=channels, dtype='int16')
+    sd.wait()
+    print("[录音] 录音结束")
+    temp_wav = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
+    write(temp_wav.name, sample_rate, recording)
+    return temp_wav.name
+
+def recognize(wav_path):
+    """
+    用vosk对wav音频进行语音识别，返回识别到的文本。
+    wav_path: 临时wav文件路径
+    """
     rec = KaldiRecognizer(vosk_model, 16000)
     wf = wave.open(wav_path, "rb")
     transcript = ""
@@ -761,53 +906,91 @@ def recognize_voice():
     res = pyjson.loads(rec.FinalResult())
     transcript += res.get("text", "")
     wf.close()
-    os.remove(webm_path)
+    # 删除临时文件
     os.remove(wav_path)
+    return transcript.strip()
 
-    if not transcript.strip():
-        def empty_stream():
-            yield f"data: {json.dumps({'error': '未识别到有效语音指令。', 'transcript': ''})}\n\n"
-        return Response(stream_with_context(empty_stream()), mimetype='text/event-stream')
+def llm(user_text):
+    """
+    调用原有Function calling和大模型推理逻辑，返回AI回复字符串。
+    user_text: 用户语音识别后的文本
+    """
+    messages = [{"role": "user", "content": user_text + ', 给我精简的回答'}]
+    print(f"messages: {messages}")
+    response = call_llama(messages)
+    # 检查是否有tool_calls
+    if response.message.tool_calls:
+        for tool_call in response.message.tool_calls:
+            if functoin_to_call := avaliable_functions.get(tool_call.function.name):
+                result = functoin_to_call(**tool_call.function.arguments)
+                messages.append(response.message)
+                messages.append({"role": "tool", "name": tool_call.function.name, "content": str(result)})
+        final_response = call_llama(messages)
+        # ai_text = ""
+        # for chunk in final_response:
+        #     ai_text += chunk.message.content
+        return final_response.message.content
+    else:
+        final_response = call_llama_without_tool(messages)
+        # ai_text = ""
+        # for chunk in final_response:
+        #     ai_text += chunk.message.content
+        return final_response.message.content
 
+def tts_and_play(text, filename="static/voice/tts_output.mp3"):
+    async def tts_task():
+        print(f"text: {text}")
+        communicate = edge_tts.Communicate(text=text, voice="zh-CN-XiaoxiaoNeural")
+        await communicate.save(filename)
+    asyncio.run(tts_task())
+
+    audio = MP3(filename)
+    duration = audio.info.length
+
+    socketio.emit('voice_status', {'status': 'streaming', 'text': text, 'duration': duration})
+    threading.Thread(target=playsound, args=(filename,), daemon=True).start()
     
 
-    messages = [{"role": "user", "content": transcript}]
-    print("users message:", messages)
-
-    end_sign = [',', '.', '!', '?', ':', ';', '。', '！', '？', '：', '；']
-
-    try:
-        response = call_llama(messages)
-        print("response:", response)
-        # 检查是否有 tool_calls
-        if response.message.tool_calls:
-            for tool_call in response.message.tool_calls:
-                if functoin_to_call := avaliable_functions.get(tool_call.function.name):
-                    # print(f"calling {tool_call.function.name} with {tool_call.function.arguments}")
-                    result = functoin_to_call(tool_call.function.arguments)
-                    # print(f"result: {result}")
-                    messages.append(response.message)
-                    messages.append({"role": "tool", "name": tool_call.function.name, "content": str(result)})               
-        else:
-            print("[Llama no tool_call, reply]")
-        final_response = call_llama(messages, is_stream=True)
-        print("final_response:", final_response)
-
-        def generate_stream():
-            sentence = ""
-            for chunk in final_response:
-                if chunk.message.content.endswith(tuple(end_sign)):
-                    sentence += chunk.message.content
-                    print(sentence, end="##", flush=True)
-                    yield f"data: {json.dumps({'text': sentence})}\n\n"
-                    sentence = ""
-                else:
-                    sentence += chunk.message.content    
-        return Response(stream_with_context(generate_stream()), mimetype='text/event-stream')
-    except Exception as e:
-        def error_stream():
-            yield f"data: {json.dumps({'error': f'Llama调用失败: {e}', 'transcript': transcript})}\n\n"
-        return Response(stream_with_context(error_stream()), mimetype='text/event-stream')
+# 语音主流程线程
+voice_status_queue = queue.Queue()
+def voice_loop():
+    while True:
+        # 1. 唤醒检测
+        try:
+            if detect_wake_word():
+                socketio.emit('voice_status', {'status': 'wake'})
+                # 2. 录音 返回temp_file_path
+                try:
+                    socketio.emit('voice_status', {'status': 'recording'})
+                    audio = record_audio()  
+                except Exception as e:
+                    print(f"Error: {e}, audio record failed")
+                    return None
+                # 3. 识别
+                try:
+                    socketio.emit('voice_status', {'status': 'processing'})
+                    text = recognize(audio) 
+                except Exception as e:
+                    print(f"Error: {e}, audio recognize failed")
+                    return None
+                # 4. LLM+TTS+本地播放
+                try:
+                    ai_text = llm(text) 
+                except Exception as e:
+                    print(f"Error: {e}, llm failed")
+                    return None
+                try:
+                    tts_and_play(ai_text) 
+                except Exception as e:
+                    print(f"Error: {e}, tts failed")
+                    break
+                # 5. 推送AI回复
+                socketio.emit('voice_status', {'status': 'result', 'text': ai_text})
+        except Exception as e:
+            print(f"Error: {e}, voice loop failed")
+            break
+        time.sleep(0.1)
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5001)
+    threading.Thread(target=voice_loop, daemon=True).start()
+    socketio.run(app, debug=True, host="0.0.0.0", port=5001, use_reloader=False)
