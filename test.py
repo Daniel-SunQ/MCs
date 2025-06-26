@@ -16,6 +16,8 @@ from PIL import Image
 import requests
 import time
 import sys
+from dotenv import load_dotenv
+load_dotenv()
 #====================================================
 #===============test_collision=======================
 #====================================================
@@ -291,8 +293,9 @@ def tool_call():
     #---------send_message-----------------------------
     try:
         def send_message(messages, is_stream=False,):
+            print(f"model_name: {os.getenv('MODEL_NAME')}")
             response: ChatResponse = chat(
-                'qwen3:1.7b',
+                str(os.getenv('MODEL_NAME')),
                 messages=messages,
                 think=False,
                 tools=tools,
@@ -307,7 +310,7 @@ def tool_call():
     try:
         def send_messsage_without_tool(messages, is_stream=False):
             response: ChatResponse = chat(
-                'qwen3:1.7b',
+                str(os.getenv('MODEL_NAME')),
                 messages=messages,
                 think=False,
                 stream=is_stream,
@@ -670,13 +673,12 @@ def arg_parse():
     parser.add_argument("--tts_save", action="store_true", help="测试TTS语音合成并保存为文件")
     parser.add_argument("--filename", type=str, default="output.mp3", help="TTS保存文件名")
     parser.add_argument("--city", type=str, default="重庆", help="指定城市名（用于天气测试）")
-    parser.add_argument("--help", action="store_true", help="显示帮助信息")
     return parser.parse_args()
 
 if __name__ == "__main__":
     args = arg_parse()
 
-    if len(sys.argv) < 2 or args.help:
+    if len(sys.argv) < 2:
         print("""Usage: 
               python test.py --collision
               python test.py --tool_call
