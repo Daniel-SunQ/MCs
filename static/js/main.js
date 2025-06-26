@@ -748,4 +748,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // ======================== 用户中心头像点击逻辑 =========================
+    const userAvatar = document.querySelector('.user-avatar');
+    if (userAvatar) {
+        userAvatar.addEventListener('click', () => {
+            window.location.href = '/user_center';
+        });
+    }
+
+    // ======================== 页面加载时自动显示drawer逻辑 =========================
+    function getQueryParam(name) {
+        const url = window.location.search;
+        const params = new URLSearchParams(url);
+        return params.get(name);
+    }
+    if (getQueryParam('drawer') === '1') {
+        showView('drawer');
+    } else {
+        showView('main');
+    }
 });
