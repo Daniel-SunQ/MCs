@@ -749,18 +749,20 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+
     // ======================== 页面加载时自动显示drawer逻辑 =========================
     function getQueryParam(name) {
         const url = window.location.search;
         const params = new URLSearchParams(url);
         return params.get(name);
     }
-    // 只在首次加载时调用一次showView，避免被后续切换覆盖
+
     if (getQueryParam('drawer') === '1') {
         showView('drawer');
     } else {
         showView('main');
     }
+
 
     // ============================ DOM Elements =============================
     const userAvatar = document.querySelector('.user-avatar');

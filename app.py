@@ -842,9 +842,11 @@ def voice_loop():
             break
         time.sleep(0.1)
 
-@app.route("/user_center")
+
+@app.route('/user_center')
 def user_center():
-    return render_template("user_center.html")
+    return render_template('user_center.html')
+
 
 if __name__ == "__main__":
     threading.Thread(target=voice_loop, daemon=True).start()
