@@ -5,6 +5,8 @@ body {
     background-color: #000;
     color: #fff;
     overflow: hidden;
+    background: url('/static/images/car_menu.jpg') no-repeat center center fixed;
+    background-size: cover;
 }
 
 /* ======================================================================= */
@@ -77,19 +79,37 @@ body {
     mask-image: linear-gradient(to top, transparent 5%, black 40%);
 }
 .main-time-date {
+    position: absolute;
+    top: 4%;
+    left: 50%;
+    transform: translate(-50%, 0);
     text-align: center;
-    padding-top: 80px; /* Space below status bar */
+    z-index: 2;
+    background: rgba(24, 26, 32, 0.55);
+    border-radius: 18px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+    padding: 24px 48px 18px 48px;
+    min-width: 320px;
+    max-width: 90vw;
+    backdrop-filter: blur(2px);
+}
+.main-time-date h1,
+#large-time-display {
+    font-size: 3.8rem;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    letter-spacing: 2px;
     color: #fff;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.18);
 }
-.main-time-date h1 {
-    font-size: 5rem;
+#large-date-display-line2,
+#large-date-display-line3 {
+    font-size: 1.2rem;
+    color: #e0e0e0;
     margin: 0;
-    font-weight: 500;
-}
-.main-time-date p {
-    font-size: 1.5rem;
-    margin: 5px 0 0;
-    font-weight: 300;
+    font-weight: 400;
+    letter-spacing: 1px;
+    text-shadow: 0 1px 8px rgba(0,0,0,0.12);
 }
 
 /* --- Bottom Dock --- */
