@@ -367,6 +367,7 @@ def test_weather(city="重庆"):
         date = (datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d")
         forecast = get_forecast_weather_by_date(date, city)
         print(f"{date} 预报：", forecast)
+    # TODO: 你可以在这里扩展为更多天数的天气预报，或支持多城市批量测试
 
 #====================================================
 #===============test_music===========================
@@ -381,6 +382,7 @@ def test_music():
     print("音乐列表：")
     for song in playlist:
         print(song)
+    # TODO: 你可以在这里添加对音乐元数据的更多处理，比如筛选、排序、导出等
 
 #====================================================
 #===============test_voice===========================
@@ -395,6 +397,7 @@ def test_voice():
     print("录音完成，开始识别...")
     text = recognize(wav_path)
     print("识别结果：", text)
+    # TODO: 你可以在这里扩展为多轮语音识别，或将识别结果与AI对话结合
 
 #====================================================
 #===============test_tts=============================
@@ -615,6 +618,7 @@ def test_music_control_api(action="play", song_id=0):
             data = {"volume": 0.5}
         resp = requests.post(f"http://127.0.0.1:5001{url}", json=data)
         print(f"音乐控制 {action} 响应：", resp.json())
+        # TODO: 你可以在这里添加更多的音乐控制动作，或批量测试多首歌曲
     except Exception as e:
         print(f"音乐控制API测试失败: {e}")
 
@@ -635,6 +639,7 @@ def test_tts_save_file(text="测试保存", filename="output.mp3"):
             print("TTS音频文件保存成功！")
         else:
             print("TTS音频文件未找到！")
+        # TODO: 你可以在这里支持更多音频格式，或自定义保存路径、文件名等
     except Exception as e:
         print(f"TTS保存文件测试失败: {e}")
 
