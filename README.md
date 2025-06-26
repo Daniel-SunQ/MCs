@@ -1,4 +1,4 @@
-##Mini Intelegent car multimode  interaction system
+## Mini Intelegent car multimode  interaction system
 
 本项目是一个基于Flask的智能车载多模态交互系统，集成了语音识别、深度学习视觉感知、车辆状态管理、多媒体娱乐、导航与自动驾驶等功能。系统支持自然语言语音控制，具备实时车辆信息展示、空调与多媒体控制、防碰撞检测等能力，旨在为智能汽车提供安全、便捷、智能的人机交互体验。
 
