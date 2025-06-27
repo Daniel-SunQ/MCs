@@ -54,6 +54,10 @@
             display: flex;
             align-items: center;
             cursor: pointer;
+            transition: background 0.2s;
+        }
+        .user-center-list li:hover {
+            background: rgba(78, 205, 196, 0.1);
         }
         .user-center-list li:last-child {
             border-bottom: none;
@@ -77,32 +81,409 @@
         .user-center-back:hover {
             background: #38b6a3;
         }
+
+        /* 动态界面样式 */
+        .user-center-view {
+            display: none;
+        }
+        .user-center-view.active {
+            display: block;
+        }
+        .view-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #333;
+        }
+        .view-back-btn {
+            background: none;
+            border: none;
+            color: #4ecdc4;
+            font-size: 1.2rem;
+            cursor: pointer;
+            margin-right: 12px;
+            padding: 4px;
+        }
+        .view-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #4ecdc4;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #b0b0b0;
+        }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 12px;
+            background: #333;
+            border: 1px solid #555;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 1rem;
+        }
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: #4ecdc4;
+        }
+        .btn-primary {
+            background: #4ecdc4;
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+        .btn-primary:hover {
+            background: #38b6a3;
+        }
+        .btn-secondary {
+            background: #666;
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            margin-left: 12px;
+            transition: background 0.2s;
+        }
+        .btn-secondary:hover {
+            background: #555;
+        }
+        .info-card {
+            background: #333;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+        .info-card h4 {
+            color: #4ecdc4;
+            margin-bottom: 8px;
+        }
+        .info-card p {
+            color: #b0b0b0;
+            line-height: 1.5;
+        }
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #666;
+            transition: .4s;
+            border-radius: 24px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .toggle-slider {
+            background-color: #4ecdc4;
+        }
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid #333;
+        }
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+        .setting-label {
+            color: #fff;
+        }
+        .setting-description {
+            color: #b0b0b0;
+            font-size: 0.9rem;
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body style="background:#181a20;">
     <div class="user-center-container">
-        <img class="user-center-avatar" src="{{ url_for('static', filename='images/avatar.jpg') }}" alt="头像">
-        <div class="user-center-username">张三</div>
-        <div class="user-center-email">user@example.com</div>
-        <div class="user-center-section">
-            <h3>账户设置</h3>
-            <ul class="user-center-list">
-                <li><i class="fas fa-user-cog"></i> 个人资料</li>
-                <li><i class="fas fa-key"></i> 修改密码</li>
-                <li><i class="fas fa-bell"></i> 通知设置</li>
-                <li><i class="fas fa-shield-alt"></i> 隐私安全</li>
-                <li><i class="fas fa-sign-out-alt"></i> 退出登录</li>
-            </ul>
+        <!-- 主界面 -->
+        <div id="main-view" class="user-center-view active">
+            <img class="user-center-avatar" src="{{ url_for('static', filename='images/avatar.jpg') }}" alt="头像">
+            <div class="user-center-username">张三</div>
+            <div class="user-center-email">user@example.com</div>
+            <div class="user-center-section">
+                <h3>账户设置</h3>
+                <ul class="user-center-list">
+                    <li data-view="profile"><i class="fas fa-user-cog"></i> 个人资料</li>
+                    <li data-view="password"><i class="fas fa-key"></i> 修改密码</li>
+                    <li data-view="notifications"><i class="fas fa-bell"></i> 通知设置</li>
+                    <li data-view="privacy"><i class="fas fa-shield-alt"></i> 隐私安全</li>
+                    <li data-view="logout"><i class="fas fa-sign-out-alt"></i> 退出登录</li>
+                </ul>
+            </div>
+            <div class="user-center-section">
+                <h3>更多功能</h3>
+                <ul class="user-center-list">
+                    <li data-view="about"><i class="fas fa-info-circle"></i> 关于系统</li>
+                </ul>
+            </div>
+            <button class="user-center-back" onclick="window.location.href='/'"><i class="fas fa-arrow-left"></i> 返回主界面</button>
         </div>
-        <div class="user-center-section">
-            <h3>更多功能</h3>
-            <ul class="user-center-list">
-                <li><i class="fas fa-info-circle"></i> 关于系统</li>
-                <!-- TODO: 你可以在这里添加更多自定义入口 -->
-            </ul>
+
+        <!-- 个人资料界面 -->
+        <div id="profile-view" class="user-center-view">
+            <div class="view-header">
+                <button class="view-back-btn" onclick="showView('main')"><i class="fas fa-arrow-left"></i></button>
+                <div class="view-title">个人资料</div>
+            </div>
+            <form id="profile-form">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" value="张三" id="profile-username">
+                </div>
+                <div class="form-group">
+                    <label>邮箱</label>
+                    <input type="email" value="user@example.com" id="profile-email">
+                </div>
+                <div class="form-group">
+                    <label>手机号</label>
+                    <input type="tel" value="138****8888" id="profile-phone">
+                </div>
+                <div class="form-group">
+                    <label>个人简介</label>
+                    <textarea rows="4" placeholder="请输入个人简介...">热爱驾驶，享受科技带来的便利。</textarea>
+                </div>
+                <button type="submit" class="btn-primary">保存修改</button>
+            </form>
         </div>
-        <button class="user-center-back" onclick="window.location.href='/'"><i class="fas fa-arrow-left"></i> 返回主界面</button>
+
+        <!-- 修改密码界面 -->
+        <div id="password-view" class="user-center-view">
+            <div class="view-header">
+                <button class="view-back-btn" onclick="showView('main')"><i class="fas fa-arrow-left"></i></button>
+                <div class="view-title">修改密码</div>
+            </div>
+            <form id="password-form">
+                <div class="form-group">
+                    <label>当前密码</label>
+                    <input type="password" placeholder="请输入当前密码">
+                </div>
+                <div class="form-group">
+                    <label>新密码</label>
+                    <input type="password" placeholder="请输入新密码">
+                </div>
+                <div class="form-group">
+                    <label>确认新密码</label>
+                    <input type="password" placeholder="请再次输入新密码">
+                </div>
+                <button type="submit" class="btn-primary">修改密码</button>
+            </form>
+        </div>
+
+        <!-- 通知设置界面 -->
+        <div id="notifications-view" class="user-center-view">
+            <div class="view-header">
+                <button class="view-back-btn" onclick="showView('main')"><i class="fas fa-arrow-left"></i></button>
+                <div class="view-title">通知设置</div>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">系统通知</div>
+                    <div class="setting-description">接收系统更新和维护通知</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">安全提醒</div>
+                    <div class="setting-description">接收安全相关的提醒和警告</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">驾驶建议</div>
+                    <div class="setting-description">接收智能驾驶建议和路况提醒</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">营销信息</div>
+                    <div class="setting-description">接收产品更新和优惠信息</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+
+        <!-- 隐私安全界面 -->
+        <div id="privacy-view" class="user-center-view">
+            <div class="view-header">
+                <button class="view-back-btn" onclick="showView('main')"><i class="fas fa-arrow-left"></i></button>
+                <div class="view-title">隐私安全</div>
+            </div>
+            <div class="info-card">
+                <h4><i class="fas fa-shield-alt"></i> 数据保护</h4>
+                <p>我们严格遵守数据保护法规，您的个人信息将被安全存储和传输。</p>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">位置信息</div>
+                    <div class="setting-description">允许应用获取位置信息用于导航</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">语音识别</div>
+                    <div class="setting-description">允许语音命令识别功能</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">驾驶数据</div>
+                </div>
+                <button class="btn-secondary">导出数据</button>
+            </div>
+            <div class="setting-item">
+                <div>
+                    <div class="setting-label">删除账户</div>
+                </div>
+                <button class="btn-secondary" style="background: #e74c3c;">删除</button>
+            </div>
+        </div>
+
+        <!-- 关于系统界面 -->
+        <div id="about-view" class="user-center-view">
+            <div class="view-header">
+                <button class="view-back-btn" onclick="showView('main')"><i class="fas fa-arrow-left"></i></button>
+                <div class="view-title">关于系统</div>
+            </div>
+            <div class="info-card">
+                <h4><i class="fas fa-car"></i> 智能驾驶系统</h4>
+                <p>版本：v1.0.0</p>
+                <p>构建日期：2024年12月</p>
+            </div>
+            <div class="info-card">
+                <h4><i class="fas fa-code"></i> 技术特性</h4>
+                <p>• 智能语音控制</p>
+                <p>• 实时导航系统</p>
+                <p>• 多媒体娱乐</p>
+                <p>• 环境监测</p>
+                <p>• 安全防护</p>
+            </div>
+            <div class="info-card">
+                <h4><i class="fas fa-heart"></i> 联系我们</h4>
+                <p>邮箱：support@drivingsystem.com</p>
+                <p>电话：400-888-8888</p>
+            </div>
+        </div>
+
+        <!-- 退出登录确认界面 -->
+        <div id="logout-view" class="user-center-view">
+            <div class="view-header">
+                <button class="view-back-btn" onclick="showView('main')"><i class="fas fa-arrow-left"></i></button>
+                <div class="view-title">退出登录</div>
+            </div>
+            <div class="info-card">
+                <h4><i class="fas fa-exclamation-triangle"></i> 确认退出</h4>
+                <p>您确定要退出当前账户吗？退出后需要重新登录才能使用系统功能。</p>
+            </div>
+            <button class="btn-primary" onclick="logout()">确认退出</button>
+            <button class="btn-secondary" onclick="showView('main')">取消</button>
+        </div>
     </div>
+
+    <script>
+        // 界面切换函数
+        function showView(viewId) {
+            // 隐藏所有界面
+            document.querySelectorAll('.user-center-view').forEach(view => {
+                view.classList.remove('active');
+            });
+            
+            // 显示目标界面
+            document.getElementById(viewId + '-view').classList.add('active');
+        }
+
+        // 为所有功能项添加点击事件
+        document.addEventListener('DOMContentLoaded', function() {
+            const listItems = document.querySelectorAll('.user-center-list li[data-view]');
+            listItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const viewId = this.getAttribute('data-view');
+                    showView(viewId);
+                });
+            });
+
+            // 表单提交事件
+            document.getElementById('profile-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                alert('个人资料已保存！');
+                showView('main');
+            });
+
+            document.getElementById('password-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                alert('密码修改成功！');
+                showView('main');
+            });
+        });
+
+        // 退出登录函数
+        function logout() {
+            if (confirm('确定要退出登录吗？')) {
+                alert('已退出登录');
+                window.location.href = '/';
+            }
+        }
+    </script>
 </body>
 </html>
 
