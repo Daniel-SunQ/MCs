@@ -1,0 +1,11 @@
+*.DS_Store
+.env
+depth_anything_v2_vits.pth
+static/.DS_Store
+static/voice/
+test1.py
+vosk-model-cn-0.22/
+vosk-model-small-cn-0.22/
+.venv/
+test_collision.py
+test_image.jpg

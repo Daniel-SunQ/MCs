@@ -702,7 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         function countValidChars(str) {
             // 只保留汉字、英文字母、数字
-            return (str.replace(/[，。！？、,.!?:;；“”‘’\"'\\[\\]（）()\\s]/g, '')).length;
+            return (str.replace(/[，。！？、,.!?:;；""''\\s]/g, '')).length;
         }
         // 流式输出函数
         function streamTextToModal(fullText, duration) {
@@ -731,4 +731,53 @@ document.addEventListener('DOMContentLoaded', () => {
             }, intervalTime); // 50ms一个字，可根据实际体验调整
         }
     })();
+
+    // ======================== 防碰撞检测按钮逻辑 =========================
+    const collisionDetectBtn = document.getElementById('collision-detect-btn');
+    if (collisionDetectBtn) {
+        collisionDetectBtn.addEventListener('click', async () => {
+            try {
+                const resp = await fetch('/api/start_collision_detection', {method: 'POST'});
+                if (resp.ok) {
+                    alert('已请求本地弹窗显示防碰撞检测画面，请在服务器本地查看。');
+                } else {
+                    alert('请求失败，请检查后端服务。');
+                }
+            } catch (e) {
+                alert('网络错误，无法请求防碰撞检测。');
+            }
+        });
+    }
+
+
+    // ======================== 页面加载时自动显示drawer逻辑 =========================
+    function getQueryParam(name) {
+        const url = window.location.search;
+        const params = new URLSearchParams(url);
+        return params.get(name);
+    }
+
+    if (getQueryParam('drawer') === '1') {
+        showView('drawer');
+    } else {
+        showView('main');
+    }
+
+
+    // ============================ DOM Elements =============================
+    const userAvatar = document.querySelector('.user-avatar');
+    if (userAvatar) {
+        userAvatar.style.cursor = 'pointer';
+        userAvatar.addEventListener('click', function() {
+            window.location.href = '/user_center';
+        });
+    }
+
+    const dockMediaIcon = document.getElementById('dock-media-icon');
+    if (dockMediaIcon) {
+        dockMediaIcon.style.cursor = 'pointer';
+        dockMediaIcon.addEventListener('click', function() {
+            showView('media-module');
+        });
+    }
 });

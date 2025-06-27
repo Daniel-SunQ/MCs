@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户中心</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .user-center-container {
+            max-width: 480px;
+            margin: 40px auto;
+            background: #23242a;
+            border-radius: 18px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+            padding: 36px 32px 32px 32px;
+            color: #fff;
+        }
+        .user-center-avatar {
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            margin: 0 auto 18px auto;
+            display: block;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+        }
+        .user-center-username {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+        .user-center-email {
+            text-align: center;
+            color: #b0b0b0;
+            margin-bottom: 18px;
+        }
+        .user-center-section {
+            margin: 24px 0 0 0;
+        }
+        .user-center-section h3 {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            color: #4ecdc4;
+        }
+        .user-center-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .user-center-list li {
+            padding: 12px 0;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        .user-center-list li:last-child {
+            border-bottom: none;
+        }
+        .user-center-list i {
+            margin-right: 14px;
+            color: #4ecdc4;
+        }
+        .user-center-back {
+            display: block;
+            margin: 32px auto 0 auto;
+            padding: 10px 32px;
+            background: #4ecdc4;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .user-center-back:hover {
+            background: #38b6a3;
+        }
+    </style>
+</head>
+<body style="background:#181a20;">
+    <div class="user-center-container">
+        <img class="user-center-avatar" src="{{ url_for('static', filename='images/avatar.jpg') }}" alt="头像">
+        <div class="user-center-username">张三</div>
+        <div class="user-center-email">user@example.com</div>
+        <div class="user-center-section">
+            <h3>账户设置</h3>
+            <ul class="user-center-list">
+                <li><i class="fas fa-user-cog"></i> 个人资料</li>
+                <li><i class="fas fa-key"></i> 修改密码</li>
+                <li><i class="fas fa-bell"></i> 通知设置</li>
+                <li><i class="fas fa-shield-alt"></i> 隐私安全</li>
+                <li><i class="fas fa-sign-out-alt"></i> 退出登录</li>
+            </ul>
+        </div>
+        <div class="user-center-section">
+            <h3>更多功能</h3>
+            <ul class="user-center-list">
+                <li><i class="fas fa-info-circle"></i> 关于系统</li>
+                <!-- TODO: 你可以在这里添加更多自定义入口 -->
+            </ul>
+        </div>
+        <button class="user-center-back" onclick="window.location.href='/'"><i class="fas fa-arrow-left"></i> 返回主界面</button>
+    </div>
+</body>
+</html>
+
