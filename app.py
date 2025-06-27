@@ -108,9 +108,13 @@ def init_database():
         )
     ''')
     
-    # 创建默认用户（如果不存在）
-    cursor.execute('SELECT * FROM users WHERE username = ?', ('admin',))
-    if not cursor.fetchone():
+    # 检查是否已有用户数据
+    cursor.execute('SELECT COUNT(*) FROM users')
+    user_count = cursor.fetchone()[0]
+    
+    # 只有在没有用户时才创建默认用户
+    if user_count == 0:
+        print("数据库为空，创建默认用户...")
         # 使用pbkdf2:sha256方法而不是默认的scrypt，提高兼容性
         default_password = generate_password_hash('admin123', method='pbkdf2:sha256')
         cursor.execute('''
@@ -181,6 +185,10 @@ def init_database():
                 INSERT INTO vehicle_settings (user_id, setting_key, setting_value)
                 VALUES (?, ?, ?)
             ''', (user_id, key, value))
+        
+        print(f"已创建默认用户 'admin' (密码: admin123) 和 {len(default_settings)} 项用户设置、{len(default_vehicle_settings)} 项车辆设置")
+    else:
+        print(f"数据库已存在 {user_count} 个用户，跳过默认用户创建")
     
     conn.commit()
     conn.close()
@@ -314,12 +322,51 @@ def register():
                 'location_permission': 'true',
                 'voice_recognition': 'true',
                 'theme': 'dark',
-                'language': 'zh-CN'
+                'language': 'zh-CN',
+                'auto_lock': '5'
             }
             
             for key, value in default_settings.items():
                 conn.execute('''
                     INSERT INTO user_settings (user_id, setting_key, setting_value)
+                    VALUES (?, ?, ?)
+                ''', (user_id, key, value))
+            
+            # 为新用户创建车辆设置
+            default_vehicle_settings = {
+                'driver_seat_position': 'normal',
+                'driver_seat_height': '0.5',
+                'driver_seat_recline': '0.3',
+                'driver_seat_lumbar': '0.5',
+                'passenger_seat_position': 'normal',
+                'passenger_seat_height': '0.5',
+                'passenger_seat_recline': '0.3',
+                'passenger_seat_lumbar': '0.5',
+                'steering_wheel_position': 'normal',
+                'steering_wheel_height': '0.5',
+                'steering_wheel_telescope': '0.5',
+                'mirror_driver_side': '0.5',
+                'mirror_passenger_side': '0.5',
+                'mirror_rear_view': '0.5',
+                'ac_driver_temp': '22.0',
+                'ac_passenger_temp': '22.0',
+                'ac_fan_speed': '3',
+                'ac_mode': 'auto',
+                'ac_circulation': 'false',
+                'ac_defrost': 'false',
+                'ac_rear_defrost': 'false',
+                'lighting_interior': '0.7',
+                'lighting_ambient': '0.5',
+                'lighting_color': 'white',
+                'suspension_mode': 'normal',
+                'steering_mode': 'normal',
+                'brake_mode': 'normal',
+                'drive_mode': 'normal'
+            }
+            
+            for key, value in default_vehicle_settings.items():
+                conn.execute('''
+                    INSERT INTO vehicle_settings (user_id, setting_key, setting_value)
                     VALUES (?, ?, ?)
                 ''', (user_id, key, value))
             
