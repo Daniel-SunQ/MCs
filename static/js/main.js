@@ -749,6 +749,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    //================= 疲劳监测按钮逻辑 =========================
+    const fatigueDetectBtn = document.getElementById('fatigue-detect-btn');
+    if (fatigueDetectBtn) {
+        fatigueDetectBtn.addEventListener('click', async () => {
+            const resp = await fetch('/api/start_fatigue_detection', {method: 'POST'});
+            if (resp.status === 'started') {
+                alert('疲劳监测已启动，请在服务器本地查看。');
+            } else {
+                alert('请求失败，请检查后端服务。');
+            }
+        });
+    }
 
     // ======================== 页面加载时自动显示drawer逻辑 =========================
     function getQueryParam(name) {
