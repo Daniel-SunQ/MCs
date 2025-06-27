@@ -25,6 +25,7 @@ from openai import OpenAI
 from vosk import Model, KaldiRecognizer
 import json as pyjson
 import subprocess
+import sys
 import edge_tts
 import asyncio
 from playsound import playsound
@@ -40,7 +41,6 @@ from datetime import datetime
 from multiprocessing import Process
 import sounddevice as sd
 from scipy.io.wavfile import write
-
 
 
 
@@ -305,9 +305,22 @@ def get_config():
     })
 
 @app.route('/api/start_fatigue_detection', methods=['POST'])
-def start_fatigue_detection():
-    print("start fatigue detection")
-    return jsonify({"status": "started"})
+## drowsy detection
+def start_drowsy_detection():
+    # print("start fatigue detection")
+    # return jsonify({"status": "started"})
+    try:
+        # 构造脚本路径
+        script_path = os.path.join(os.path.dirname(__file__), 'inference.py')
+
+        # 使用 python 启动 inference.py 子进程（可切换为 'python3'）
+        subprocess.Popen([sys.executable, script_path])
+
+        return jsonify({"status": "started"})
+    except Exception as e:
+        print("❌ 启动疲劳检测失败：", e)
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 
 
 #weather interface for quick view

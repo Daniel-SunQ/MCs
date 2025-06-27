@@ -754,7 +754,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (fatigueDetectBtn) {
         fatigueDetectBtn.addEventListener('click', async () => {
             const resp = await fetch('/api/start_fatigue_detection', {method: 'POST'});
-            if (resp.status === 'started') {
+
+            const data = await resp.json();
+            if (data.status === 'started') {
                 alert('疲劳监测已启动，请在服务器本地查看。');
             } else {
                 alert('请求失败，请检查后端服务。');
