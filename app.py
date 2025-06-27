@@ -318,7 +318,7 @@ def start_drowsy_detection():
 
         return jsonify({"status": "started"})
     except Exception as e:
-        print("❌ 启动疲劳检测失败：", e)
+        print("open drowsy detection missed sth wrong：", e)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
