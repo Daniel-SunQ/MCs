@@ -988,17 +988,150 @@ def get_forecast_weather_by_date(date, location):
 def get_date():
     return datetime.now().strftime("%Y-%m-%d")
 
+#===============get_current_user=======================
+ac_status = {
+    'driver_temp': '22.5',
+    'passenger_temp': '22.5',
+    'ac_status': 'on',
+    'ac_mode': 'auto',
+    'ac_circulation': 'false',
+}
+navigation_status = {
+    'navigating': False,
+    'destination': '',
+}
+#===============control_ac=============================
+def control_ac(action=None, value=None, zone='driver', delta=None, mode=None):
+    """
+    智能空调控制
+    """
+    global ac_status
+    result = {}
+
+    # 区域处理
+    zones = [zone] if zone in ['driver', 'passenger'] else ['driver', 'passenger']
+
+    if action == 'set_temp' and value is not None:
+        for z in zones:
+            ac_status[f'{z}_temp'] = float(value)
+        result['msg'] = f"{'、'.join(zones)}温度已设为{value}度"
+    elif action == 'temp_up':
+        for z in zones:
+            ac_status[f'{z}_temp'] += float(delta) if delta else 1
+        result['msg'] = f"{'、'.join(zones)}温度已升高{delta or 1}度"
+    elif action == 'temp_down':
+        for z in zones:
+            ac_status[f'{z}_temp'] -= float(delta) if delta else 1
+        result['msg'] = f"{'、'.join(zones)}温度已降低{delta or 1}度"
+    elif action == 'on':
+        ac_status['ac_status'] = 'on'
+        result['msg'] = "空调已打开"
+    elif action == 'off':
+        ac_status['ac_status'] = 'off'
+        result['msg'] = "空调已关闭"
+    elif action == 'set_mode' and mode:
+        ac_status['ac_mode'] = mode
+        result['msg'] = f"空调已切换到{mode}模式"
+    else:
+        result['msg'] = "未识别的空调指令"
+
+    # 推送到前端
+    socketio.emit('ac_status', ac_status)
+    result['ac_status'] = ac_status
+    return result
+
+# ===============music_control function=================
+def music_control(action, song_id=None, volume=None, mode=None, shuffle=None):
+    """
+    智能音乐播放器控制
+    参数说明：
+      action: 操作类型，play/pause/next/prev/set_volume/toggle_shuffle/toggle_repeat
+      song_id: 歌曲ID（可选，切歌/播放时用）
+      volume: 音量（0-1，设置音量时用）
+      mode: 循环模式（none/one/all，切换循环时用）
+      shuffle: 是否随机（true/false，切换随机时用）
+    """
+    global music_player
+    result = {}
+    if action == "play":
+        if song_id is not None:
+            music_player["current_song"] = int(song_id)
+        music_player["is_playing"] = True
+        result["msg"] = f"正在播放：{music_player['playlist'][music_player['current_song']]['title']}"
+    elif action == "pause":
+        music_player["is_playing"] = False
+        result["msg"] = "音乐已暂停"
+    elif action == "next":
+        if music_player["shuffle"]:
+            import random
+            music_player["current_song"] = random.randint(0, len(music_player["playlist"]) - 1)
+        else:
+            music_player["current_song"] = (music_player["current_song"] + 1) % len(music_player["playlist"])
+        result["msg"] = f"切换到：{music_player['playlist'][music_player['current_song']]['title']}"
+    elif action == "prev":
+        if music_player["shuffle"]:
+            import random
+            music_player["current_song"] = random.randint(0, len(music_player["playlist"]) - 1)
+        else:
+            music_player["current_song"] = (music_player["current_song"] - 1) % len(music_player["playlist"])
+        result["msg"] = f"切换到：{music_player['playlist'][music_player['current_song']]['title']}"
+    elif action == "set_volume" and volume is not None:
+        music_player["volume"] = max(0.0, min(1.0, float(volume)))
+        result["msg"] = f"音量已设置为{int(music_player['volume']*100)}%"
+    elif action == "toggle_shuffle":
+        music_player["shuffle"] = not music_player["shuffle"]
+        result["msg"] = "随机播放已" + ("开启" if music_player["shuffle"] else "关闭")
+    elif action == "toggle_repeat":
+        repeat_modes = ["none", "one", "all"]
+        current_index = repeat_modes.index(music_player["repeat"])
+        music_player["repeat"] = repeat_modes[(current_index + 1) % len(repeat_modes)]
+        result["msg"] = f"循环模式：{music_player['repeat']}"
+    else:
+        result["msg"] = "未识别的音乐操作"
+    result["music_status"] = {
+        "current_song": music_player["current_song"],
+        "is_playing": music_player["is_playing"],
+        "volume": music_player["volume"],
+        "shuffle": music_player["shuffle"],
+        "repeat": music_player["repeat"]
+    }
+    return result
 #===============other_functions=======================
 ##TODO: 添加其他函数，例如操控音乐，操控空调，或者操控导航等等
-## when you add new function, you should add the function to the tools and avaliable_functions
-## also, you should add the function to the tools_prompt
+
+
+#===============navigation_control=======================
+def navigation_control(action, destination=None):
+    """
+    智能导航控制
+    参数说明：
+      action: 操作类型，start/start_navigation/stop/stop_navigation
+      destination: 目的地（仅在开始导航时用）
+    """
+    global navigation_status
+    result = {}
+    if action in ["start", "start_navigation"] and destination:
+        navigation_status["navigating"] = True
+        navigation_status["destination"] = destination
+        result["msg"] = f"已开始导航到：{destination}"
+    elif action in ["stop", "stop_navigation"]:
+        navigation_status["navigating"] = False
+        navigation_status["destination"] = ""
+        result["msg"] = "已停止导航"
+    else:
+        result["msg"] = "未识别的导航操作"
+    result["navigation_status"] = navigation_status
+    return result
 
 #===========================================================
 #===============tools and avaliable_functions===============
 tools_prompt = {
     "get_now_weather": "获取现在城市的天气，用户应该提供城市名",
     "get_forecast_weather_by_date": "如果用户问你某一个城市未来某一天的天气，你应该返回该天的天气，用户应该提供日期和城市",
-    "get_date": "获取现在的时间"
+    "get_date": "获取现在的时间",
+    "control_ac":"智能空调控制，支持温度设定、升降温、开关、模式切换等。参数：action（操作类型）、value（目标温度）、zone（区域）、delta（变化量）、mode（模式）",
+    "music_control": "智能音乐播放器控制，支持播放、暂停、切歌、音量、随机、循环等。参数：action（操作类型）、song_id（歌曲ID）、volume（音量0-1）、mode（循环模式）、shuffle（是否随机）",
+    "navigation_control": "智能导航控制，支持开始/停止导航。参数：action（操作类型），destination（目的地，开始导航时用）"
 }
 tools = [
     {
@@ -1057,12 +1190,91 @@ tools = [
             },
         }
     },
+    {
+        'type': 'function',
+        'function': {
+        'name': 'control_ac',
+        'description': tools_prompt['control_ac'],
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'action': {'type': 'string', 'description': '操作类型，如设置温度到25度、升高2度、降低2度、打开空调、关闭空调、切换到制冷模式等，'
+                           '，可选值：set_temp、temp_up、temp_down、on、off、set_mode'},
+                'value': {'type': 'number', 'description': '目标温度，默认22.5'},
+                'zone': {'type': 'string', 'description': '区域，可选值：driver、passenger，默认driver和passenger同步'},
+                'delta': {'type': 'number', 'description': '变化量，默认2'},
+                'mode': {'type': 'string', 'description': '模式，如制冷、制热、除湿、送风、自动等，可选值：auto、manual、eco、cool、heat、dry、fan_only、heat_cool'},
+            },
+            'required': ['action'],
+            'additionalProperties': False,
+        },
+    }
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'music_control',
+            'description': tools_prompt['music_control'],
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'description': '操作类型，可选值：play、pause、next、prev、set_volume、toggle_shuffle、toggle_repeat'
+                    },
+                    'song_id': {
+                        'type': 'integer',
+                        'description': '歌曲ID，切歌/播放时用'
+                    },
+                    'volume': {
+                        'type': 'number',
+                        'description': '音量，0-1之间'
+                    },
+                    'mode': {
+                        'type': 'string',
+                        'description': '循环模式，none/one/all'
+                    },
+                    'shuffle': {
+                        'type': 'boolean',
+                        'description': '是否随机播放'
+                    }
+                },
+                'required': ['action'],
+                'additionalProperties': False,
+            }
+        }
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'navigation_control',
+            'description': tools_prompt['navigation_control'],
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'description': '操作类型，可选值：start、start_navigation、stop、stop_navigation'
+                    },
+                    'destination': {
+                        'type': 'string',
+                        'description': '目的地，仅开始导航时用'
+                    }
+                },
+                'required': ['action'],
+                'additionalProperties': False,
+            }
+        }
+    }
 ]
 
 avaliable_functions = {
     "get_now_weather": get_now_weather,
     "get_forecast_weather_by_date": get_forecast_weather_by_date,
     "get_date": get_date,
+    "control_ac": control_ac,
+    "music_control": music_control,
+    "navigation_control": navigation_control,
 }
 
 #===============call_llama===============
@@ -1156,27 +1368,25 @@ def llm(user_text):
     调用原有Function calling和大模型推理逻辑，返回AI回复字符串。
     user_text: 用户语音识别后的文本
     """
-    messages = [{"role": "user", "content": user_text + ', 给我精简的回答'}]
+    if user_text == "":
+        user_text = "用户没有说话，你需要请求用户重新说一遍"
+    messages = [{"role": "user", "content": user_text + ', 给我精简的回答， 补充：我的用户名是' + get_current_user()['username']}]
     print(f"messages: {messages}")
     response = call_llama(messages)
     # 检查是否有tool_calls
-    if response.message.tool_calls:
+    if hasattr(response, 'message') and getattr(response.message, 'tool_calls', None):
         for tool_call in response.message.tool_calls:
             if functoin_to_call := avaliable_functions.get(tool_call.function.name):
                 result = functoin_to_call(**tool_call.function.arguments)
-                messages.append(response.message)
-                messages.append({"role": "tool", "name": tool_call.function.name, "content": str(result)})
-        final_response = call_llama(messages)
-        # ai_text = ""
-        # for chunk in final_response:
-        #     ai_text += chunk.message.content
-        return final_response.message.content
+                print(f"[TOOL_CALL] {tool_call.function.name} {tool_call.function.arguments}")
+                messages.append({"role": "assistant", "content": str(response.message.tool_calls)})
+                messages.append({"role": "tool", "name": tool_call.function.name, "content": str(result.get('msg', ''))})
+                print(f"当前测试的信息: {messages[-1]['content']}")
+        final_reply = call_llama_without_tool(messages)
+        print(f"大模型回复【2】: {final_reply.message.content}")  
+        return final_reply.message.content
     else:
-        final_response = call_llama_without_tool(messages)
-        # ai_text = ""
-        # for chunk in final_response:
-        #     ai_text += chunk.message.content
-        return final_response.message.content
+        return response.message.content
 
 def tts_and_play(text, filename="static/voice/tts_output.mp3"):
     async def tts_task():
@@ -1245,6 +1455,6 @@ def user_center():
 if __name__ == "__main__":
     # 初始化数据库
     init_database()
-    
+    # 启动语音循环
     threading.Thread(target=voice_loop, daemon=True).start()
     socketio.run(app, debug=True, host="0.0.0.0", port=5001, use_reloader=False)

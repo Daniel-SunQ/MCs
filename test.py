@@ -323,7 +323,7 @@ def tool_call():
     #---------message_test-----------------------------
     #TODO:here you can add your own prompt to get what you want from the model
     
-    users_text = "现在的时间是什么"
+    users_text = "帮我将空调调到25度"
     messages = [{"role": "user", "content": users_text}]
     print(f"first messages: {messages}")
     try:
@@ -351,6 +351,92 @@ def tool_call():
     except Exception as e:
         print(f"Error: {e}, final_response problem!!!")
         return
+
+#====test_control_ac===============================
+def test_call_control_ac():
+    """
+    测试空调控制功能，覆盖多种自然语言指令和参数组合
+    """
+    from app import control_ac, tools, avaliable_functions, tools_prompt
+    # 测试用例列表
+    test_cases = [
+        "帮我将空调调到25度",           # 直接设定温度
+        "空调温度高一点",               # 升高温度
+        "空调温度低两度",               # 降低温度
+        "打开空调",                     # 开空调
+        "关闭空调",                     # 关空调
+        "空调调到自动模式",             # 切换模式
+        "副驾驶温度调到23度",           # 副驾驶设定温度
+        "我有点热",                     # 模糊指令，温度应降低
+        "我有点冷",                     # 模糊指令，温度应升高
+    ]
+    
+    def send_message(messages, is_stream=False):
+        from ollama import chat, ChatResponse
+        import os
+        response: ChatResponse = chat(
+            str(os.getenv('MODEL_NAME')),
+            messages=messages,
+            think=False,
+            tools=tools,
+            stream=is_stream,
+        )
+        return response
+
+    def send_message_without_tool(messages, is_stream=False):
+        from ollama import chat, ChatResponse
+        import os
+        response: ChatResponse = chat(
+            str(os.getenv('MODEL_NAME')),
+            messages=messages,
+            think=False,
+            stream=is_stream,
+        )
+
+    for user_text in test_cases:
+        print(f"\n==== 测试指令: {user_text} ====")
+        messages = [{"role": "user", "content": user_text + '，你是一个车载语音助手，回复指令时可以大胆调用工具，不要担心工具调用失败，最后给我一个精简的回复'}]
+        response = send_message(messages)
+        print(f"大模型回复【1】: {getattr(response, 'message', response)}")
+        # 检查是否有tool_calls
+        if hasattr(response, 'message') and getattr(response.message, 'tool_calls', None):
+            for tool_call in response.message.tool_calls:
+                if functoin_to_call := avaliable_functions.get(tool_call.function.name):
+                    result = functoin_to_call(**tool_call.function.arguments)
+                    messages.append({"role": "assistant", "content": str(response.message.tool_calls)})
+                    messages.append({"role": "tool", "name": tool_call.function.name, "content": str(result.get('msg', ''))})
+                    print(f"second messages: {messages}")
+                    print(f"调用函数: {tool_call.function.name}, 参数: {tool_call.function.arguments}")
+                    print(f"函数返回: {result}")
+                    print(f"【final_messages】: {messages}")
+                    final_reply = send_message_without_tool(messages)
+                    print(f"大模型回复【2】: {final_reply}")
+        else:
+            print("未触发工具调用，仅为普通对话。")
+        
+
+#===============test_teply_from_llm=================
+def test_reply_from_llm():
+    from app import call_llama_without_tool
+    user_text = "用户没有说话，你需要请求用户重新说一遍"
+    messages = [{"role": "user", 
+                 "content": user_text
+                },
+                 {
+                     "role": "assistant",
+                     "content": "我是一个车载语音助手，回复指令时可以大胆调用工具，不要担心工具调用失败，最后给我一个精简的回复"
+                    #  "现在我调用了"
+                 },
+                #  {
+                #      "role": "tool",
+                #      "name": "control_ac",
+                #      "content": "空调已调到25度"
+                #  }
+                 ]
+    response = call_llama_without_tool(messages=messages)
+    print(f"大模型回复: {response}")
+
+
 
 #====================================================
 #===============test_weather=========================
@@ -646,6 +732,28 @@ def test_tts_save_file(text="测试保存", filename="output.mp3"):
     except Exception as e:
         print(f"TTS保存文件测试失败: {e}")
 
+def test_all_control():
+    from app import music_control, navigation_control, call_llama, call_llama_without_tool
+    from app import avaliable_functions, tools_prompt
+    user_text = "帮我将空调调到25度，然后播放音乐，然后开始导航到解放碑"
+    print(f"测试指令: {user_text}")
+    messages = [{"role": "user", "content": user_text + '，你是一个车载语音助手，回复指令时可以大胆调用工具，不要担心工具调用失败，最后给我一个精简的回复'}]
+    response = call_llama(messages)
+    print(f"大模型回复【1】: {response.message.tool_calls}")
+    if hasattr(response, 'message') and getattr(response.message, 'tool_calls', None):
+        for tool_call in response.message.tool_calls:
+            if functoin_to_call := avaliable_functions.get(tool_call.function.name):
+                result = functoin_to_call(**tool_call.function.arguments)
+                print(f"[TOOL_CALL] {tool_call.function.name} {tool_call.function.arguments}")
+                messages.append({"role": "assistant", "content": str(response.message.tool_calls)})
+                messages.append({"role": "tool", "name": tool_call.function.name, "content": str(result.get('msg', ''))})
+                print(f"当前测试的信息: {messages[-1]['content']}")
+        final_reply = call_llama_without_tool(messages)
+        print(f"大模型回复【2】: {final_reply.message.content}")    
+    else:
+        print("未触发工具调用，仅为普通对话。")
+
+
 #====================================================
 #===============arg_parse============================
 #====================================================
@@ -673,6 +781,9 @@ def arg_parse():
     parser.add_argument("--tts_save", action="store_true", help="测试TTS语音合成并保存为文件")
     parser.add_argument("--filename", type=str, default="output.mp3", help="TTS保存文件名")
     parser.add_argument("--city", type=str, default="重庆", help="指定城市名（用于天气测试）")
+    parser.add_argument("--control_ac", action="store_true", help="测试空调控制API")
+    parser.add_argument("--reply_from_llm", action="store_true", help="测试大模型回复")
+    parser.add_argument("--all_control", action="store_true", help="测试所有控制API")
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -756,5 +867,11 @@ if __name__ == "__main__":
         test_music_control_api(args.action, args.song_id)
     elif args.tts_save:
         test_tts_save_file(args.text, args.filename)
+    elif args.control_ac:
+        test_call_control_ac()
+    elif args.reply_from_llm:
+        test_reply_from_llm()
+    elif args.all_control:
+        test_all_control()
     else:
         print("No test selected")
