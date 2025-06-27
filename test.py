@@ -607,9 +607,9 @@ def test_navigation_status():
 """
 def test_wake_word():
     try:
-        from app import detect_wake_word
+        from app import detect_wake_word_enhanced
         print("请说出唤醒词（如 hey siri）...")
-        detected = detect_wake_word()
+        detected = detect_wake_word_enhanced()
         if detected:
             print("唤醒词检测成功！")
         else:
