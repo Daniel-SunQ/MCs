@@ -24,7 +24,18 @@ from torchvision import transforms
 from torchvision.models import vit_b_16
 from PIL import Image
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def get_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
+
+
+device = get_device()
+print("Device:", device)
 
 
 def load_vit_model(vit_path):
@@ -64,7 +75,8 @@ def drowsy_test(yolo_weight_path, vit_model_path):
 
     vit_model = load_vit_model(vit_model_path)
 
-    cap = cv2.VideoCapture(0)
+    # cap = cv2.VideoCapture(0)   # windows
+    cap = cv2.VideoCapture(1, cv2.CAP_AVFOUNDATION)     # macOS
     if not cap.isOpened():
         print("can not open the webcam")
         return
@@ -103,6 +115,7 @@ def drowsy_test(yolo_weight_path, vit_model_path):
 
 
 if __name__ == '__main__':
-    yolo_weight = r"E:\25work\MCs\runs\detect\train\weights\best.pt"
-    vit_weight = r"E:\25work\MCs\checkpoints\best.pth"
+    yolo_weight = r"/Users/lai/PycharmProjects/vehicleSystem/MCs/runs/detect/train/weights/best.pt"
+    vit_weight = r"/Users/lai/PycharmProjects/vehicleSystem/MCs/checkpoints/best.pth"
     drowsy_test(yolo_weight, vit_weight)
+
