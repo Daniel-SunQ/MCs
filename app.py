@@ -304,6 +304,11 @@ def get_config():
         'amap_security_secret': os.getenv('AMAP_SECURITY_SECRET')
     })
 
+@app.route('/api/start_fatigue_detection', methods=['POST'])
+def start_fatigue_detection():
+    print("start fatigue detection")
+    return jsonify({"status": "started"})
+
 
 #weather interface for quick view
 @app.route('/api/weather')
