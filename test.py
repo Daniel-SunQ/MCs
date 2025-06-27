@@ -309,12 +309,14 @@ def tool_call():
     #---------send_message_without_tool------------------
     try:
         def send_messsage_without_tool(messages, is_stream=False):
+            from ollama import chat, ChatResponse
+            import os
             response: ChatResponse = chat(
                 str(os.getenv('MODEL_NAME')),
                 messages=messages,
                 think=False,
                 stream=is_stream,
-                )
+            )
             return response
     except Exception as e:
         print(f"Error: {e}, send_messsage_without_tool problem!!!")
@@ -360,15 +362,7 @@ def test_call_control_ac():
     from app import control_ac, tools, avaliable_functions, tools_prompt
     # 测试用例列表
     test_cases = [
-        "帮我将空调调到25度",           # 直接设定温度
-        "空调温度高一点",               # 升高温度
-        "空调温度低两度",               # 降低温度
-        "打开空调",                     # 开空调
-        "关闭空调",                     # 关空调
-        "空调调到自动模式",             # 切换模式
-        "副驾驶温度调到23度",           # 副驾驶设定温度
-        "我有点热",                     # 模糊指令，温度应降低
-        "我有点冷",                     # 模糊指令，温度应升高
+        "你好啊，将空调调到25度，导航到重庆，播放音乐，然后告诉我重庆的天气",
     ]
     
     def send_message(messages, is_stream=False):
@@ -392,25 +386,26 @@ def test_call_control_ac():
             think=False,
             stream=is_stream,
         )
+        return response
 
     for user_text in test_cases:
         print(f"\n==== 测试指令: {user_text} ====")
-        messages = [{"role": "user", "content": user_text + '，你是一个车载语音助手，回复指令时可以大胆调用工具，不要担心工具调用失败，最后给我一个精简的回复'}]
+        messages = [{"role": "user", "content": user_text }]
+        messages.append({"role": "assistant", "content": "好的，我来帮您处理这些请求。"})
         response = send_message(messages)
         print(f"大模型回复【1】: {getattr(response, 'message', response)}")
         # 检查是否有tool_calls
         if hasattr(response, 'message') and getattr(response.message, 'tool_calls', None):
             for tool_call in response.message.tool_calls:
                 if functoin_to_call := avaliable_functions.get(tool_call.function.name):
-                    result = functoin_to_call(**tool_call.function.arguments)
-                    messages.append({"role": "assistant", "content": str(response.message.tool_calls)})
+                    print(f"调用函数: {tool_call.function.name}, 参数: {tool_call.function.arguments}")
+                    result = functoin_to_call(**tool_call.function.arguments)                 
+                    print(f"函数返回: {result}")
                     messages.append({"role": "tool", "name": tool_call.function.name, "content": str(result.get('msg', ''))})
                     print(f"second messages: {messages}")
-                    print(f"调用函数: {tool_call.function.name}, 参数: {tool_call.function.arguments}")
-                    print(f"函数返回: {result}")
-                    print(f"【final_messages】: {messages}")
-                    final_reply = send_message_without_tool(messages)
-                    print(f"大模型回复【2】: {final_reply}")
+            print(f"【final_messages】: {messages}")
+            final_reply = send_message_without_tool(messages)
+            print(f"大模型回复【2】: {final_reply.message.content}")
         else:
             print("未触发工具调用，仅为普通对话。")
         
@@ -418,23 +413,43 @@ def test_call_control_ac():
 #===============test_teply_from_llm=================
 def test_reply_from_llm():
     from app import call_llama_without_tool
-    user_text = "用户没有说话，你需要请求用户重新说一遍"
-    messages = [{"role": "user", 
-                 "content": user_text
-                },
-                 {
-                     "role": "assistant",
-                     "content": "我是一个车载语音助手，回复指令时可以大胆调用工具，不要担心工具调用失败，最后给我一个精简的回复"
-                    #  "现在我调用了"
-                 },
-                #  {
-                #      "role": "tool",
-                #      "name": "control_ac",
-                #      "content": "空调已调到25度"
-                #  }
-                 ]
-    response = call_llama_without_tool(messages=messages)
-    print(f"大模型回复: {response}")
+    user_text = "你好啊，将空调调到25度，导航到重庆，播放音乐，然后告诉我重庆的天气"
+    messages = [
+        {"role": "user", "content": user_text},
+        {
+            "role": "assistant", 
+            "content": "好的，我来帮您处理这些请求。"
+        },
+        {
+            "role": "tool",
+            "name": "control_ac",
+            "content": "driver温度已设为25度"
+        },
+        {
+            "role": "tool",
+            "name": "navigation_control",
+            "content": "已开始导航到：重庆"
+        },
+        {
+            "role": "tool",
+            "name": "music_control",
+            "content": "'正在播放：Bruno Major - Easily (Official Audio)"
+        },
+        {
+            "role": "tool",
+            "name": "get_now_weather",
+            "content": "'温度': '34', '湿度': '42', '风速': '7', '天气': '多云', '体感温度': '36'"
+        }
+    ]
+    try:
+        response = call_llama_without_tool(messages=messages)
+        if '</think>' in str(response.message.content):
+            print(f"大模型回复: {str(response.message.content).split('</think>')[1].strip()}")
+        else:
+            print(f"大模型回复: {response.message.content}")
+    except Exception as e:
+        print(f"Error: {e}, test_reply_from_llm problem!!!")
+        return
 
 
 
@@ -449,13 +464,16 @@ def test_weather(city="重庆"):
     from app import get_now_weather, get_forecast_weather_by_date
     print(f"测试城市：{city}")
     now = get_now_weather(city)
-    print("当前天气：", now)
+    print("当前天气：", now.get('msg', ''))
     # 未来三天
     from datetime import datetime, timedelta
-    for i in range(3):
-        date = (datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d")
-        forecast = get_forecast_weather_by_date(date, city)
-        print(f"{date} 预报：", forecast)
+    # for i in range(3):
+    #     date = (datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d")
+    #     forecast = get_forecast_weather_by_date(date, city)
+    #     print(f"{date} 预报：", forecast.get('msg', ''))
+    date = (datetime.now() + timedelta(days=3)).strftime("%Y-%m-%d")
+    forecast = get_forecast_weather_by_date(date, city) 
+    print(f"未来天气：{forecast.get('msg', '')}")
     # TODO: 你可以在这里扩展为更多天数的天气预报，或支持多城市批量测试
 
 #====================================================
@@ -589,9 +607,9 @@ def test_navigation_status():
 """
 def test_wake_word():
     try:
-        from app import detect_wake_word
+        from app import detect_wake_word_enhanced
         print("请说出唤醒词（如 hey siri）...")
-        detected = detect_wake_word()
+        detected = detect_wake_word_enhanced()
         if detected:
             print("唤醒词检测成功！")
         else:

@@ -988,52 +988,53 @@ def get_now_weather(location):
             '温度': response['now']['temp'],
             '湿度': response['now']['humidity'],
             '风速': response['now']['windSpeed'],
-            '风向': response['now']['windDir'],
             '天气': response['now']['text'],
             '体感温度': response['now']['feelsLike'],
-            '气压': response['now']['pressure'],
-            '能见度': response['now']['vis'],
         }
     except Exception as e:
         print(f"Error: {e}, return default now weather")
         data = {
-            '温度': '20',
-            '湿度': '50',
-            '风速': '10',
+            'msg': '获取天气失败',
+            'weather': '获取天气失败',
         }
-    return data
+    result = {
+        'msg': data,
+        'weather': data,
+    }
+    return result
 
 def get_forecast_weather_by_date(date, location):
     try:
         location_id = get_location_id(location)
-        print(f"location: {location}")
-        print(f"date: {date}")
+        # print(f"location: {location}")
+        # print(f"date: {date}")
         url = f"{url_api_weather}7d?location={location_id}&key={os.getenv('QWEATHER_API_KEY')}"
-        print(f"url: {url}")
+        # print(f"url: {url}")
         reseponse = requests.get(url).json()['daily']
         info = reseponse
     except Exception as e:
         print(f"Error: {e}, return default forecastweather")
         return None
-    data = [ 
-        {
+    result = { 
+        'msg': {
             '日期': i['fxDate'],
             '最高温度': i['tempMax'],
             '最低温度': i['tempMin'],
             '天气': i['textDay'],
-            '白天风向': i['windDirDay'],
             '风速': i['windSpeedDay'],
-            '湿度': i['humidity'],
             '紫外线强度': i['uvIndex'],
-            '能见度': i['vis'],
         }
         for i in info if i['fxDate'] == date
-        ]
-    return data
+    }
+    return result
 
 #===============get_date=======================
 def get_date():
-    return datetime.now().strftime("%Y-%m-%d")
+    result = {  
+        'msg': datetime.now().strftime("%Y-%m-%d"),
+        'date': datetime.now().strftime("%Y-%m-%d"),
+    }
+    return result
 
 #===============get_current_user=======================
 ac_status = {
@@ -1327,7 +1328,7 @@ avaliable_functions = {
 #===============call_llama===============
 def call_llama(messages, is_stream=False):
     response: ChatResponse = chat(
-        'qwen3:1.7b',
+        f'{os.getenv("MODEL_NAME")}',
         messages=messages,
         think=False,
         tools=tools,
@@ -1337,30 +1338,67 @@ def call_llama(messages, is_stream=False):
 
 def call_llama_without_tool(messages, is_stream=False):
     response: ChatResponse = chat(
-        'qwen3:1.7b',
+        f'{os.getenv("MODEL_NAME")}',
         messages=messages,
         think=False,
         stream=is_stream,
     )
     return response
 
-# 唤醒词检测函数
-def detect_wake_word():
+# 增强版唤醒词检测函数
+def detect_wake_word_enhanced():
     """
-    检测唤醒词。集成Porcupine唤醒词检测。
-    返回True表示检测到唤醒词，否则返回False。
+    增强版唤醒词检测，包含噪声抑制和音频预处理
+    适用于嘈杂环境
     """
     access_key = os.getenv('PORCUPINE_ACCESS_KEY')
-    porcupine = pvporcupine.create(access_key=access_key, keywords=["hey siri"])
-    recorder = PvRecorder(device_index=0, frame_length=512)
-    recorder.start()
+    
     try:
-        while True:
-            pcm = recorder.read()
-            result = porcupine.process(pcm)
-            if result >= 0:
-                print('detected')
-                break
+        # 使用更保守的配置，减少误触发
+        porcupine = pvporcupine.create(
+            access_key=access_key, 
+            keywords=["hey siri", "hey google", "alexa"],  # 多个唤醒词
+            sensitivities=[0.6, 0.6, 0.6]  # 更低的灵敏度
+        )
+        
+        # 优化录音器设置
+        recorder = PvRecorder(
+            device_index=0, 
+            frame_length=porcupine.frame_length
+        )
+        
+        print("[增强唤醒词检测] 开始监听...")
+        recorder.start()
+        
+        # 添加连续检测逻辑，减少误触发
+        detection_count = 0
+        required_detections = 2  # 需要连续检测到2次才确认
+        
+        try:
+            while True:
+                pcm = recorder.read()
+                keyword_index = porcupine.process(pcm)
+                
+                if keyword_index >= 0:
+                    detection_count += 1
+                    keyword = ["hey siri", "hey google", "alexa"][keyword_index]
+                    print(f'[增强唤醒词检测] 检测到唤醒词: {keyword} (第{detection_count}次)')
+                    
+                    if detection_count >= required_detections:
+                        print(f'[增强唤醒词检测] 确认唤醒词: {keyword}')
+                        return True
+                else:
+                    # 重置检测计数
+                    detection_count = 0
+                    
+        except KeyboardInterrupt:
+            print("[增强唤醒词检测] 用户中断")
+            return False
+            
+    except Exception as e:
+        print(f"[增强唤醒词检测] 错误: {e}")
+        return False
+        
     finally:
         try:
             recorder.stop()
@@ -1374,7 +1412,109 @@ def detect_wake_word():
             porcupine.delete()
         except Exception:
             pass
-    return True
+    
+    return False
+
+# 环境噪声检测函数
+def check_ambient_noise(duration=3):
+    """
+    检测环境噪声水平，用于动态调整唤醒词检测参数
+    """
+    try:
+        import numpy as np
+        
+        # 录制环境音频
+        sample_rate = 16000
+        recording = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype='int16')
+        sd.wait()
+        
+        # 计算音频能量
+        audio_data = np.array(recording)
+        energy = np.mean(np.abs(audio_data))
+        
+        # 根据噪声水平返回建议的灵敏度
+        if energy < 1000:  # 安静环境
+            return "quiet", 0.8
+        elif energy < 3000:  # 轻微噪声
+            return "low_noise", 0.7
+        elif energy < 6000:  # 中等噪声
+            return "medium_noise", 0.6
+        else:  # 高噪声
+            return "high_noise", 0.5
+            
+    except Exception as e:
+        print(f"[噪声检测] 错误: {e}")
+        return "unknown", 0.7
+
+# 自适应唤醒词检测函数
+def detect_wake_word_adaptive():
+    """
+    自适应唤醒词检测，根据环境噪声动态调整参数
+    """
+    access_key = os.getenv('PORCUPINE_ACCESS_KEY')
+    
+    # 检测环境噪声
+    noise_level, sensitivity = check_ambient_noise()
+    print(f"[自适应唤醒词检测] 环境噪声水平: {noise_level}, 建议灵敏度: {sensitivity}")
+    
+    try:
+        # 根据噪声水平选择唤醒词
+        if noise_level in ["high_noise", "medium_noise"]:
+            # 嘈杂环境使用更简单的唤醒词
+            keywords = ["hey siri"]
+            sensitivities = [sensitivity]
+        else:
+            # 安静环境可以使用更多唤醒词
+            keywords = ["hey siri", "hey google"]
+            sensitivities = [sensitivity, sensitivity]
+        
+        porcupine = pvporcupine.create(
+            access_key=access_key, 
+            keywords=keywords,
+            sensitivities=sensitivities
+        )
+        
+        recorder = PvRecorder(
+            device_index=0, 
+            frame_length=porcupine.frame_length
+        )
+        
+        print(f"[自适应唤醒词检测] 开始监听，使用唤醒词: {keywords}")
+        recorder.start()
+        
+        try:
+            while True:
+                pcm = recorder.read()
+                keyword_index = porcupine.process(pcm)
+                
+                if keyword_index >= 0:
+                    keyword = keywords[keyword_index]
+                    print(f'[自适应唤醒词检测] 检测到唤醒词: {keyword}')
+                    return True
+                    
+        except KeyboardInterrupt:
+            print("[自适应唤醒词检测] 用户中断")
+            return False
+            
+    except Exception as e:
+        print(f"[自适应唤醒词检测] 错误: {e}")
+        return False
+        
+    finally:
+        try:
+            recorder.stop()
+        except Exception:
+            pass
+        try:
+            recorder.delete()
+        except Exception:
+            pass
+        try:
+            porcupine.delete()
+        except Exception:
+            pass
+    
+    return False
 
 def record_audio(duration=7, sample_rate=16000, channels=1):
     """
@@ -1416,19 +1556,22 @@ def llm(user_text):
     user_text: 用户语音识别后的文本
     """
     if user_text == "":
-        user_text = "用户没有说话，你需要请求用户重新说一遍"
-    messages = [{"role": "user", "content": user_text + ', 给我精简的回答， 补充：我的用户名是' + get_current_user()['username']}]
-    print(f"messages: {messages}")
+        print("请重新说话")
+        return
+    messages = [{"role": "user", "content": user_text }]
+    messages.append({"role": "assistant", "content": "好的，我来帮您处理这些请求。"})
+    print(f"【用户信息】: {messages}")
     response = call_llama(messages)
+    print(f"大模型回复【1】: {getattr(response, 'message', response)}")
     # 检查是否有tool_calls
     if hasattr(response, 'message') and getattr(response.message, 'tool_calls', None):
         for tool_call in response.message.tool_calls:
             if functoin_to_call := avaliable_functions.get(tool_call.function.name):
-                result = functoin_to_call(**tool_call.function.arguments)
-                print(f"[TOOL_CALL] {tool_call.function.name} {tool_call.function.arguments}")
-                messages.append({"role": "assistant", "content": str(response.message.tool_calls)})
+                print(f"【调用函数】: {tool_call.function.name}, 参数: {tool_call.function.arguments}")
+                result = functoin_to_call(**tool_call.function.arguments)                 
+                print(f"【函数返回】: {result}")
                 messages.append({"role": "tool", "name": tool_call.function.name, "content": str(result.get('msg', ''))})
-                print(f"当前测试的信息: {messages[-1]['content']}")
+        print(f"【合并后的信息】: {messages}")
         final_reply = call_llama_without_tool(messages)
         print(f"大模型回复【2】: {final_reply.message.content}")  
         return final_reply.message.content
@@ -1455,7 +1598,7 @@ def voice_loop():
     while True:
         # 1. 唤醒检测
         try:
-            if detect_wake_word():
+            if detect_wake_word_enhanced():
                 socketio.emit('voice_status', {'status': 'wake'})
                 # 2. 录音 返回temp_file_path
                 try:
@@ -1473,7 +1616,9 @@ def voice_loop():
                     return None
                 # 4. LLM+TTS+本地播放
                 try:
-                    ai_text = llm(text) 
+                    ai_text = llm(text)
+                    if ai_text == "":
+                        return None
                 except Exception as e:
                     print(f"Error: {e}, llm failed")
                     return None
