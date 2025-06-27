@@ -780,4 +780,462 @@ document.addEventListener('DOMContentLoaded', () => {
             showView('media-module');
         });
     }
+
+    // =======================================================================
+    // ======================== SETTINGS MODULE LOGIC =========================
+    // =======================================================================
+    
+    // 设置导航切换
+    const settingsNavItems = document.querySelectorAll('.settings-nav-item');
+    const settingsPanels = document.querySelectorAll('.settings-panel');
+    
+    settingsNavItems.forEach(item => {
+        item.addEventListener('click', function() {
+            const target = this.getAttribute('data-target');
+            
+            // 移除所有活动状态
+            settingsNavItems.forEach(nav => nav.classList.remove('active'));
+            settingsPanels.forEach(panel => panel.classList.remove('active'));
+            
+            // 添加活动状态
+            this.classList.add('active');
+            document.getElementById(target).classList.add('active');
+        });
+    });
+    
+    // 个人资料表单提交
+    const profileFormSettings = document.getElementById('profile-form-settings');
+    if (profileFormSettings) {
+        profileFormSettings.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                username: document.getElementById('profile-username-settings').value,
+                email: document.getElementById('profile-email-settings').value,
+                phone: document.getElementById('profile-phone-settings').value,
+                bio: document.getElementById('profile-bio-settings').value
+            };
+            
+            try {
+                const response = await fetch('/api/user/profile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('个人资料已保存！');
+                } else {
+                    alert('保存失败: ' + data.error);
+                }
+            } catch (error) {
+                alert('网络错误，请稍后重试');
+            }
+        });
+    }
+    
+    // 通知设置保存
+    const notificationSettings = ['system-notifications', 'security-alerts', 'driving-suggestions', 'marketing-info'];
+    notificationSettings.forEach(settingId => {
+        const checkbox = document.getElementById(settingId);
+        if (checkbox) {
+            checkbox.addEventListener('change', async function() {
+                const keyMapping = {
+                    'system-notifications': 'system_notifications',
+                    'security-alerts': 'security_alerts',
+                    'driving-suggestions': 'driving_suggestions',
+                    'marketing-info': 'marketing_info'
+                };
+                
+                const key = keyMapping[settingId];
+                if (key) {
+                    try {
+                        await fetch('/api/user/settings', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                [key]: this.checked.toString()
+                            })
+                        });
+                    } catch (error) {
+                        console.error('保存设置失败:', error);
+                    }
+                }
+            });
+        }
+    });
+    
+    // 隐私设置保存
+    const privacySettings = ['location-permission', 'voice-recognition'];
+    privacySettings.forEach(settingId => {
+        const checkbox = document.getElementById(settingId);
+        if (checkbox) {
+            checkbox.addEventListener('change', async function() {
+                const keyMapping = {
+                    'location-permission': 'location_permission',
+                    'voice-recognition': 'voice_recognition'
+                };
+                
+                const key = keyMapping[settingId];
+                if (key) {
+                    try {
+                        await fetch('/api/user/settings', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                [key]: this.checked.toString()
+                            })
+                        });
+                    } catch (error) {
+                        console.error('保存设置失败:', error);
+                    }
+                }
+            });
+        }
+    });
+    
+    // 系统设置保存
+    const systemSettings = ['theme-select', 'language-select', 'auto-lock-select'];
+    systemSettings.forEach(settingId => {
+        const select = document.getElementById(settingId);
+        if (select) {
+            select.addEventListener('change', async function() {
+                const keyMapping = {
+                    'theme-select': 'theme',
+                    'language-select': 'language',
+                    'auto-lock-select': 'auto_lock'
+                };
+                
+                const key = keyMapping[settingId];
+                if (key) {
+                    try {
+                        await fetch('/api/user/settings', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                [key]: this.value
+                            })
+                        });
+                    } catch (error) {
+                        console.error('保存设置失败:', error);
+                    }
+                }
+            });
+        }
+    });
+    
+    // 音量滑块
+    const volumeSlider = document.getElementById('volume-slider');
+    const volumeValue = document.getElementById('volume-value');
+    if (volumeSlider && volumeValue) {
+        volumeSlider.addEventListener('input', function() {
+            volumeValue.textContent = this.value + '%';
+        });
+        
+        volumeSlider.addEventListener('change', async function() {
+            try {
+                await fetch('/api/user/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        volume: (this.value / 100).toString()
+                    })
+                });
+            } catch (error) {
+                console.error('保存音量设置失败:', error);
+            }
+        });
+    }
+    
+    // 加载用户设置到设置界面
+    async function loadSettingsToUI() {
+        try {
+            const response = await fetch('/api/user/settings');
+            if (response.ok) {
+                const settings = await response.json();
+                
+                // 设置通知开关
+                if (settings.system_notifications) {
+                    const checkbox = document.getElementById('system-notifications');
+                    if (checkbox) checkbox.checked = settings.system_notifications === 'true';
+                }
+                if (settings.security_alerts) {
+                    const checkbox = document.getElementById('security-alerts');
+                    if (checkbox) checkbox.checked = settings.security_alerts === 'true';
+                }
+                if (settings.driving_suggestions) {
+                    const checkbox = document.getElementById('driving-suggestions');
+                    if (checkbox) checkbox.checked = settings.driving_suggestions === 'true';
+                }
+                if (settings.marketing_info) {
+                    const checkbox = document.getElementById('marketing-info');
+                    if (checkbox) checkbox.checked = settings.marketing_info === 'true';
+                }
+                
+                // 设置隐私开关
+                if (settings.location_permission) {
+                    const checkbox = document.getElementById('location-permission');
+                    if (checkbox) checkbox.checked = settings.location_permission === 'true';
+                }
+                if (settings.voice_recognition) {
+                    const checkbox = document.getElementById('voice-recognition');
+                    if (checkbox) checkbox.checked = settings.voice_recognition === 'true';
+                }
+                
+                // 设置系统选项
+                if (settings.theme) {
+                    const select = document.getElementById('theme-select');
+                    if (select) select.value = settings.theme;
+                }
+                if (settings.language) {
+                    const select = document.getElementById('language-select');
+                    if (select) select.value = settings.language;
+                }
+                if (settings.auto_lock) {
+                    const select = document.getElementById('auto-lock-select');
+                    if (select) select.value = settings.auto_lock;
+                }
+                
+                // 设置音量
+                if (settings.volume) {
+                    const slider = document.getElementById('volume-slider');
+                    const value = document.getElementById('volume-value');
+                    if (slider && value) {
+                        const volumePercent = Math.round(parseFloat(settings.volume) * 100);
+                        slider.value = volumePercent;
+                        value.textContent = volumePercent + '%';
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('加载设置失败:', error);
+        }
+    }
+    
+    // 当设置模块显示时加载设置
+    if (settingsDockButton) {
+        settingsDockButton.addEventListener('click', () => {
+            showView('settings-module');
+            loadSettingsToUI();
+            loadVehicleSettingsToUI();
+        });
+    }
+    
+    // =======================================================================
+    // ======================== VEHICLE SETTINGS LOGIC ========================
+    // =======================================================================
+    
+    // 车辆设置滑块控制
+    const vehicleSliders = [
+        'driver-seat-height', 'driver-seat-recline', 'driver-seat-lumbar',
+        'steering-wheel-height', 'steering-wheel-telescope'
+    ];
+    
+    vehicleSliders.forEach(sliderId => {
+        const slider = document.getElementById(sliderId);
+        const valueDisplay = document.getElementById(sliderId + '-value');
+        
+        if (slider && valueDisplay) {
+            slider.addEventListener('input', function() {
+                valueDisplay.textContent = this.value + '%';
+            });
+            
+            slider.addEventListener('change', async function() {
+                const key = sliderId.replace(/-/g, '_');
+                try {
+                    await fetch('/api/vehicle/settings', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            [key]: (this.value / 100).toString()
+                        })
+                    });
+                } catch (error) {
+                    console.error('保存车辆设置失败:', error);
+                }
+            });
+        }
+    });
+    
+    // 车辆设置选择器
+    const vehicleSelects = [
+        'driver-seat-position', 'steering-wheel-position',
+        'ac-fan-speed', 'ac-mode', 'drive-mode', 'suspension-mode',
+        'steering-mode', 'brake-mode'
+    ];
+    
+    vehicleSelects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (select) {
+            select.addEventListener('change', async function() {
+                const key = selectId.replace(/-/g, '_');
+                try {
+                    await fetch('/api/vehicle/settings', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            [key]: this.value
+                        })
+                    });
+                } catch (error) {
+                    console.error('保存车辆设置失败:', error);
+                }
+            });
+        }
+    });
+    
+    // 温度控制
+    window.adjustTemp = async function(side, delta) {
+        const display = document.getElementById(side + '-temp-display');
+        const currentTemp = parseFloat(display.textContent);
+        const newTemp = Math.max(16, Math.min(30, currentTemp + delta));
+        display.textContent = newTemp.toFixed(1) + '°C';
+        
+        const key = side === 'driver' ? 'ac_driver_temp' : 'ac_passenger_temp';
+        try {
+            await fetch('/api/vehicle/settings', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    [key]: newTemp.toFixed(1)
+                })
+            });
+        } catch (error) {
+            console.error('保存温度设置失败:', error);
+        }
+    };
+    
+    // 加载车辆设置到界面
+    async function loadVehicleSettingsToUI() {
+        try {
+            const response = await fetch('/api/vehicle/settings');
+            if (response.ok) {
+                const settings = await response.json();
+                
+                // 设置座椅滑块
+                if (settings.driver_seat_height) {
+                    const slider = document.getElementById('driver-seat-height');
+                    const value = document.getElementById('driver-seat-height-value');
+                    if (slider && value) {
+                        const percent = Math.round(parseFloat(settings.driver_seat_height) * 100);
+                        slider.value = percent;
+                        value.textContent = percent + '%';
+                    }
+                }
+                
+                if (settings.driver_seat_recline) {
+                    const slider = document.getElementById('driver-seat-recline');
+                    const value = document.getElementById('driver-seat-recline-value');
+                    if (slider && value) {
+                        const percent = Math.round(parseFloat(settings.driver_seat_recline) * 100);
+                        slider.value = percent;
+                        value.textContent = percent + '%';
+                    }
+                }
+                
+                if (settings.driver_seat_lumbar) {
+                    const slider = document.getElementById('driver-seat-lumbar');
+                    const value = document.getElementById('driver-seat-lumbar-value');
+                    if (slider && value) {
+                        const percent = Math.round(parseFloat(settings.driver_seat_lumbar) * 100);
+                        slider.value = percent;
+                        value.textContent = percent + '%';
+                    }
+                }
+                
+                // 设置方向盘滑块
+                if (settings.steering_wheel_height) {
+                    const slider = document.getElementById('steering-wheel-height');
+                    const value = document.getElementById('steering-wheel-height-value');
+                    if (slider && value) {
+                        const percent = Math.round(parseFloat(settings.steering_wheel_height) * 100);
+                        slider.value = percent;
+                        value.textContent = percent + '%';
+                    }
+                }
+                
+                if (settings.steering_wheel_telescope) {
+                    const slider = document.getElementById('steering-wheel-telescope');
+                    const value = document.getElementById('steering-wheel-telescope-value');
+                    if (slider && value) {
+                        const percent = Math.round(parseFloat(settings.steering_wheel_telescope) * 100);
+                        slider.value = percent;
+                        value.textContent = percent + '%';
+                    }
+                }
+                
+                // 设置选择器
+                if (settings.driver_seat_position) {
+                    const select = document.getElementById('driver-seat-position');
+                    if (select) select.value = settings.driver_seat_position;
+                }
+                
+                if (settings.steering_wheel_position) {
+                    const select = document.getElementById('steering-wheel-position');
+                    if (select) select.value = settings.steering_wheel_position;
+                }
+                
+                if (settings.ac_fan_speed) {
+                    const select = document.getElementById('ac-fan-speed');
+                    if (select) select.value = settings.ac_fan_speed;
+                }
+                
+                if (settings.ac_mode) {
+                    const select = document.getElementById('ac-mode');
+                    if (select) select.value = settings.ac_mode;
+                }
+                
+                if (settings.drive_mode) {
+                    const select = document.getElementById('drive-mode');
+                    if (select) select.value = settings.drive_mode;
+                }
+                
+                if (settings.suspension_mode) {
+                    const select = document.getElementById('suspension-mode');
+                    if (select) select.value = settings.suspension_mode;
+                }
+                
+                if (settings.steering_mode) {
+                    const select = document.getElementById('steering-mode');
+                    if (select) select.value = settings.steering_mode;
+                }
+                
+                if (settings.brake_mode) {
+                    const select = document.getElementById('brake-mode');
+                    if (select) select.value = settings.brake_mode;
+                }
+                
+                // 设置温度显示
+                if (settings.ac_driver_temp) {
+                    const display = document.getElementById('driver-temp-display');
+                    if (display) display.textContent = settings.ac_driver_temp + '°C';
+                }
+                
+                if (settings.ac_passenger_temp) {
+                    const display = document.getElementById('passenger-temp-display');
+                    if (display) display.textContent = settings.ac_passenger_temp + '°C';
+                }
+            }
+        } catch (error) {
+            console.error('加载车辆设置失败:', error);
+        }
+    }
 });
