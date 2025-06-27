@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, Response, stream_with_context   
+from flask import Flask, render_template, jsonify, request, Response, stream_with_context, session, redirect, url_for
 from flask_cors import CORS
 import json
 import os
@@ -40,6 +40,9 @@ from datetime import datetime
 from multiprocessing import Process
 import sounddevice as sd
 from scipy.io.wavfile import write
+import sqlite3
+from werkzeug.security import generate_password_hash, check_password_hash
+import uuid
 
 
 
@@ -50,53 +53,436 @@ from scipy.io.wavfile import write
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here')
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# 模拟车辆状态数据
-vehicle_status = {
-    "speed": 0,
-    "fuel": 85,
-    "temperature": 22,
-    "engine_status": "running",
-    "battery": 90,
-    "tire_pressure": [32, 31, 33, 32],
-    "odometer": 12500,
-}
+# =======================================================================
+# =========================== DATABASE SETUP ============================
+# =======================================================================
 
-# 模拟空调状态
-ac_status = {
-    "temperature": 22,
-    "fan_speed": 2,
-    "mode": "auto",
-    "defrost": False,
-    "recirculation": False,
-}
+def init_database():
+    """初始化数据库"""
+    conn = sqlite3.connect('driving_system.db')
+    cursor = conn.cursor()
+    
+    # 创建用户表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            avatar TEXT DEFAULT '/static/images/avatar.jpg',
+            phone TEXT,
+            bio TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # 创建用户设置表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            setting_key TEXT NOT NULL,
+            setting_value TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            UNIQUE(user_id, setting_key)
+        )
+    ''')
+    
+    # 创建车辆设置表
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS vehicle_settings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            setting_key TEXT NOT NULL,
+            setting_value TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            UNIQUE(user_id, setting_key)
+        )
+    ''')
+    
+    # 创建默认用户（如果不存在）
+    cursor.execute('SELECT * FROM users WHERE username = ?', ('admin',))
+    if not cursor.fetchone():
+        # 使用pbkdf2:sha256方法而不是默认的scrypt，提高兼容性
+        default_password = generate_password_hash('admin123', method='pbkdf2:sha256')
+        cursor.execute('''
+            INSERT INTO users (username, email, password_hash, bio)
+            VALUES (?, ?, ?, ?)
+        ''', ('admin', 'admin@drivingsystem.com', default_password, '系统管理员'))
+        
+        user_id = cursor.lastrowid
+        
+        # 为默认用户创建默认设置
+        default_settings = {
+            'driver_temp': '22.5',
+            'passenger_temp': '22.5',
+            'volume': '0.7',
+            'shuffle': 'false',
+            'repeat': 'none',
+            'system_notifications': 'true',
+            'security_alerts': 'true',
+            'driving_suggestions': 'false',
+            'marketing_info': 'false',
+            'location_permission': 'true',
+            'voice_recognition': 'true',
+            'theme': 'dark',
+            'language': 'zh-CN',
+            'auto_lock': '5'
+        }
+        
+        for key, value in default_settings.items():
+            cursor.execute('''
+                INSERT INTO user_settings (user_id, setting_key, setting_value)
+                VALUES (?, ?, ?)
+            ''', (user_id, key, value))
+        
+        # 为默认用户创建车辆设置
+        default_vehicle_settings = {
+            'driver_seat_position': 'normal',  # normal, sport, comfort
+            'driver_seat_height': '0.5',       # 0.0-1.0
+            'driver_seat_recline': '0.3',      # 0.0-1.0
+            'driver_seat_lumbar': '0.5',       # 0.0-1.0
+            'passenger_seat_position': 'normal',
+            'passenger_seat_height': '0.5',
+            'passenger_seat_recline': '0.3',
+            'passenger_seat_lumbar': '0.5',
+            'steering_wheel_position': 'normal', # normal, sport, comfort
+            'steering_wheel_height': '0.5',      # 0.0-1.0
+            'steering_wheel_telescope': '0.5',   # 0.0-1.0
+            'mirror_driver_side': '0.5',         # 0.0-1.0
+            'mirror_passenger_side': '0.5',      # 0.0-1.0
+            'mirror_rear_view': '0.5',           # 0.0-1.0
+            'ac_driver_temp': '22.0',
+            'ac_passenger_temp': '22.0',
+            'ac_fan_speed': '3',                 # 1-5
+            'ac_mode': 'auto',                   # auto, manual, eco
+            'ac_circulation': 'false',
+            'ac_defrost': 'false',
+            'ac_rear_defrost': 'false',
+            'lighting_interior': '0.7',          # 0.0-1.0
+            'lighting_ambient': '0.5',           # 0.0-1.0
+            'lighting_color': 'white',           # white, blue, green, red, purple
+            'suspension_mode': 'normal',         # normal, sport, comfort
+            'steering_mode': 'normal',           # normal, sport, comfort
+            'brake_mode': 'normal',              # normal, sport, comfort
+            'drive_mode': 'normal'               # normal, sport, eco, snow
+        }
+        
+        for key, value in default_vehicle_settings.items():
+            cursor.execute('''
+                INSERT INTO vehicle_settings (user_id, setting_key, setting_value)
+                VALUES (?, ?, ?)
+            ''', (user_id, key, value))
+    
+    conn.commit()
+    conn.close()
 
-# 模拟多媒体状态
-media_status = {
-    "playing": False,
-    "current_track": "未知歌曲",
-    "artist": "未知艺术家",
-    "volume": 50,
-    "source": "radio",
-}
+def get_db_connection():
+    """获取数据库连接"""
+    conn = sqlite3.connect('driving_system.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# 模拟导航状态
-navigation_status = {
-    "destination": "未设置目的地",
-    "eta": "未知",
-    "distance": "未知",
-    "route": [],
-}
+# =======================================================================
+# =========================== USER AUTHENTICATION =======================
+# =======================================================================
 
-# 模拟自动驾驶状态
-autopilot_status = {"enabled": False, "level": "L2", "status": "待机"}
+def get_current_user():
+    """获取当前登录用户"""
+    if 'user_id' not in session:
+        return None
+    
+    conn = get_db_connection()
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (session['user_id'],)).fetchone()
+    conn.close()
+    return user
 
-# 模拟语音控制状态
-voice_status = {"listening": False, "last_command": "无"}
+def get_user_settings(user_id):
+    """获取用户设置"""
+    conn = get_db_connection()
+    settings = {}
+    rows = conn.execute('SELECT setting_key, setting_value FROM user_settings WHERE user_id = ?', (user_id,)).fetchall()
+    for row in rows:
+        settings[row['setting_key']] = row['setting_value']
+    conn.close()
+    return settings
 
-# ======================================================================= */
+def get_vehicle_settings(user_id):
+    """获取车辆设置"""
+    conn = get_db_connection()
+    settings = {}
+    rows = conn.execute('SELECT setting_key, setting_value FROM vehicle_settings WHERE user_id = ?', (user_id,)).fetchall()
+    for row in rows:
+        settings[row['setting_key']] = row['setting_value']
+    conn.close()
+    return settings
+
+def save_user_setting(user_id, key, value):
+    """保存用户设置"""
+    conn = get_db_connection()
+    conn.execute('''
+        INSERT OR REPLACE INTO user_settings (user_id, setting_key, setting_value, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ''', (user_id, key, value))
+    conn.commit()
+    conn.close()
+
+def save_vehicle_setting(user_id, key, value):
+    """保存车辆设置"""
+    conn = get_db_connection()
+    conn.execute('''
+        INSERT OR REPLACE INTO vehicle_settings (user_id, setting_key, setting_value, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ''', (user_id, key, value))
+    conn.commit()
+    conn.close()
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        
+        conn = get_db_connection()
+        user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+        conn.close()
+        
+        if user and check_password_hash(user['password_hash'], password):
+            session['user_id'] = user['id']
+            session['username'] = user['username']
+            return jsonify({'success': True, 'message': '登录成功'})
+        else:
+            return jsonify({'success': False, 'message': '用户名或密码错误'}), 401
+    
+    return render_template('login.html')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        data = request.get_json()
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not username or not email or not password:
+            return jsonify({'success': False, 'message': '请填写所有必填字段'}), 400
+        
+        try:
+            conn = get_db_connection()
+            
+            # 检查用户名是否已存在
+            existing_user = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+            if existing_user:
+                conn.close()
+                return jsonify({'success': False, 'message': '用户名已存在'}), 400
+            
+            # 检查邮箱是否已存在
+            existing_email = conn.execute('SELECT * FROM users WHERE email = ?', (email,)).fetchone()
+            if existing_email:
+                conn.close()
+                return jsonify({'success': False, 'message': '邮箱已被注册'}), 400
+            
+            # 创建新用户
+            password_hash = generate_password_hash(password, method='pbkdf2:sha256')
+            cursor = conn.execute('''
+                INSERT INTO users (username, email, password_hash, bio)
+                VALUES (?, ?, ?, ?)
+            ''', (username, email, password_hash, '欢迎使用智能驾驶系统'))
+            
+            user_id = cursor.lastrowid
+            
+            # 为新用户创建默认设置
+            default_settings = {
+                'driver_temp': '22.5',
+                'passenger_temp': '22.5',
+                'volume': '0.7',
+                'shuffle': 'false',
+                'repeat': 'none',
+                'system_notifications': 'true',
+                'security_alerts': 'true',
+                'driving_suggestions': 'false',
+                'marketing_info': 'false',
+                'location_permission': 'true',
+                'voice_recognition': 'true',
+                'theme': 'dark',
+                'language': 'zh-CN'
+            }
+            
+            for key, value in default_settings.items():
+                conn.execute('''
+                    INSERT INTO user_settings (user_id, setting_key, setting_value)
+                    VALUES (?, ?, ?)
+                ''', (user_id, key, value))
+            
+            conn.commit()
+            conn.close()
+            
+            return jsonify({'success': True, 'message': '注册成功'})
+            
+        except Exception as e:
+            return jsonify({'success': False, 'message': f'注册失败: {str(e)}'}), 500
+    
+    return render_template('register.html')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
+
+# =======================================================================
+# =========================== USER SETTINGS API =========================
+# =======================================================================
+
+@app.route('/api/user/settings')
+def get_settings():
+    """获取当前用户的设置"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未登录'}), 401
+    
+    settings = get_user_settings(user['id'])
+    return jsonify(settings)
+
+@app.route('/api/user/settings', methods=['POST'])
+def update_settings():
+    """更新用户设置"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未登录'}), 401
+    
+    data = request.get_json()
+    for key, value in data.items():
+        save_user_setting(user['id'], key, str(value))
+    
+    return jsonify({'success': True, 'message': '设置已保存'})
+
+@app.route('/api/vehicle/settings')
+def get_vehicle_settings_api():
+    """获取车辆设置"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未登录'}), 401
+    
+    settings = get_vehicle_settings(user['id'])
+    return jsonify(settings)
+
+@app.route('/api/vehicle/settings', methods=['POST'])
+def update_vehicle_settings():
+    """更新车辆设置"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未登录'}), 401
+    
+    data = request.get_json()
+    for key, value in data.items():
+        save_vehicle_setting(user['id'], key, str(value))
+    
+    return jsonify({'success': True, 'message': '车辆设置已保存'})
+
+@app.route('/api/user/profile')
+def get_profile():
+    """获取用户资料"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未登录'}), 401
+    
+    return jsonify({
+        'username': user['username'],
+        'email': user['email'],
+        'avatar': user['avatar'],
+        'phone': user['phone'],
+        'bio': user['bio']
+    })
+
+@app.route('/api/user/profile', methods=['POST'])
+def update_profile():
+    """更新用户资料"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未登录'}), 401
+    
+    data = request.get_json()
+    username = data.get('username')
+    email = data.get('email')
+    phone = data.get('phone')
+    bio = data.get('bio')
+    
+    try:
+        conn = get_db_connection()
+        
+        # 检查用户名是否已被其他用户使用
+        if username != user['username']:
+            existing = conn.execute('SELECT * FROM users WHERE username = ? AND id != ?', 
+                                  (username, user['id'])).fetchone()
+            if existing:
+                conn.close()
+                return jsonify({'error': '用户名已被使用'}), 400
+        
+        # 检查邮箱是否已被其他用户使用
+        if email != user['email']:
+            existing = conn.execute('SELECT * FROM users WHERE email = ? AND id != ?', 
+                                  (email, user['id'])).fetchone()
+            if existing:
+                conn.close()
+                return jsonify({'error': '邮箱已被使用'}), 400
+        
+        # 更新用户资料
+        conn.execute('''
+            UPDATE users 
+            SET username = ?, email = ?, phone = ?, bio = ?
+            WHERE id = ?
+        ''', (username, email, phone, bio, user['id']))
+        
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': '资料更新成功'})
+        
+    except Exception as e:
+        return jsonify({'error': f'更新失败: {str(e)}'}), 500
+
+@app.route('/api/user/password', methods=['POST'])
+def change_password():
+    """修改密码"""
+    user = get_current_user()
+    if not user:
+        return jsonify({'error': '未登录'}), 401
+    
+    data = request.get_json()
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    
+    if not current_password or not new_password:
+        return jsonify({'error': '请填写所有密码字段'}), 400
+    
+    # 验证当前密码
+    if not check_password_hash(user['password_hash'], current_password):
+        return jsonify({'error': '当前密码错误'}), 400
+    
+    try:
+        # 更新密码
+        new_password_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
+        conn = get_db_connection()
+        conn.execute('UPDATE users SET password_hash = ? WHERE id = ?', 
+                    (new_password_hash, user['id']))
+        conn.commit()
+        conn.close()
+        
+        return jsonify({'success': True, 'message': '密码修改成功'})
+        
+    except Exception as e:
+        return jsonify({'error': f'密码修改失败: {str(e)}'}), 500
+
+# =======================================================================
 # =========================== DEPTH ANYTHING V2 ========================== */
 # ======================================================================= */
 
@@ -209,7 +595,11 @@ music_player = {
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    # 检查用户是否已登录
+    user = get_current_user()
+    if not user:
+        return redirect(url_for('login'))
+    return render_template("index.html", user=user)
 
 
 @app.route("/api/vehicle/status")
@@ -845,9 +1235,16 @@ def voice_loop():
 
 @app.route('/user_center')
 def user_center():
-    return render_template('user_center.html')
+    user = get_current_user()
+    if not user:
+        return redirect(url_for('login'))
+    return render_template('user_center.html', user=user)
+
 
 
 if __name__ == "__main__":
+    # 初始化数据库
+    init_database()
+    
     threading.Thread(target=voice_loop, daemon=True).start()
     socketio.run(app, debug=True, host="0.0.0.0", port=5001, use_reloader=False)

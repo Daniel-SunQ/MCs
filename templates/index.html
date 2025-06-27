@@ -15,8 +15,11 @@
         <!-- Top Status Bar -->
         <header class="new-status-bar">
             <div class="status-bar-left">
-                <div class="user-avatar">
-                    <img src="{{ url_for('static', filename='images/avatar.jpg') }}" alt="User">
+                <div class="user-avatar" onclick="window.location.href='/user_center'">
+                    <img src="{{ user.avatar if user else url_for('static', filename='images/avatar.jpg') }}" alt="User">
+                    <div class="user-info">
+                        <span class="username">{{ user.username if user else '未登录' }}</span>
+                    </div>
                 </div>
                 <div class="status-item range">
                     <i class="fas fa-battery-full"></i>
@@ -218,10 +221,6 @@
                 <button class="close-module-btn"><i class="fas fa-times"></i></button>
                 <h2>车载应用</h2><p>内容待添加...</p>
             </div>
-            <div class="module" id="settings-module" style="display: none;">
-                <button class="close-module-btn"><i class="fas fa-times"></i></button>
-                <h2>设置</h2><p>内容待添加...</p>
-            </div>
         </div>
 
         <!-- ======================================================================= -->
@@ -390,19 +389,417 @@
     <!-- ======================================================================= -->
     <div id="settings-module" class="module">
         <div class="module-header">
-            <h2>设置</h2>
+            <h2>个性化设置</h2>
             <button class="close-module-btn"><i class="fas fa-times"></i></button>
         </div>
-        <div class="module-content">
-            <div class="settings-grid">
-                <button class="setting-btn"><i class="fas fa-desktop"></i><span>显示</span></button>
-                <button class="setting-btn"><i class="fas fa-volume-up"></i><span>声音</span></button>
-                <button class="setting-btn"><i class="fas fa-wifi"></i><span>连接</span></button>
-                <button class="setting-btn"><i class="fas fa-car"></i><span>车辆</span></button>
-                <button class="setting-btn"><i class="fas fa-user-cog"></i><span>个人资料</span></button>
-                <button class="setting-btn"><i class="fas fa-bell"></i><span>通知</span></button>
-                <button class="setting-btn"><i class="fas fa-shield-alt"></i><span>安全</span></button>
-                <button class="setting-btn"><i class="fas fa-info-circle"></i><span>关于</span></button>
+        <div class="module-content settings-content">
+            <!-- 设置导航 -->
+            <div class="settings-nav">
+                <div class="settings-nav-item active" data-target="profile-settings">
+                    <i class="fas fa-user-cog"></i>
+                    <span>个人资料</span>
+                </div>
+                <div class="settings-nav-item" data-target="vehicle-settings">
+                    <i class="fas fa-car"></i>
+                    <span>车辆设置</span>
+                </div>
+                <div class="settings-nav-item" data-target="notification-settings">
+                    <i class="fas fa-bell"></i>
+                    <span>通知设置</span>
+                </div>
+                <div class="settings-nav-item" data-target="privacy-settings">
+                    <i class="fas fa-shield-alt"></i>
+                    <span>隐私安全</span>
+                </div>
+                <div class="settings-nav-item" data-target="system-settings">
+                    <i class="fas fa-cog"></i>
+                    <span>系统设置</span>
+                </div>
+                <div class="settings-nav-item" data-target="about-settings">
+                    <i class="fas fa-info-circle"></i>
+                    <span>关于系统</span>
+                </div>
+            </div>
+
+            <!-- 设置内容区域 -->
+            <div class="settings-panels">
+                <!-- 个人资料设置 -->
+                <div id="profile-settings" class="settings-panel active">
+                    <h3>个人资料</h3>
+                    <form id="profile-form-settings">
+                        <div class="form-group">
+                            <label>用户名</label>
+                            <input type="text" id="profile-username-settings" value="{{ user.username if user else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>邮箱</label>
+                            <input type="email" id="profile-email-settings" value="{{ user.email if user else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>手机号</label>
+                            <input type="tel" id="profile-phone-settings" value="{{ user.phone if user else '' }}">
+                        </div>
+                        <div class="form-group">
+                            <label>个人简介</label>
+                            <textarea rows="3" id="profile-bio-settings">{{ user.bio if user else '' }}</textarea>
+                        </div>
+                        <button type="submit" class="btn-primary">保存修改</button>
+                    </form>
+                </div>
+
+                <!-- 车辆设置 -->
+                <div id="vehicle-settings" class="settings-panel">
+                    <h3>车辆设置</h3>
+                    
+                    <!-- 座椅设置 -->
+                    <div class="settings-section">
+                        <h4><i class="fas fa-chair"></i> 座椅设置</h4>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">驾驶座椅位置</div>
+                                    <div class="setting-description">调整驾驶座椅位置</div>
+                                </div>
+                                <select id="driver-seat-position" class="setting-select">
+                                    <option value="normal">标准</option>
+                                    <option value="sport">运动</option>
+                                    <option value="comfort">舒适</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">驾驶座椅高度</div>
+                                    <div class="setting-description">调整座椅高度</div>
+                                </div>
+                                <div class="slider-container">
+                                    <input type="range" id="driver-seat-height" min="0" max="100" value="50">
+                                    <span id="driver-seat-height-value">50%</span>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">驾驶座椅倾斜</div>
+                                    <div class="setting-description">调整座椅倾斜角度</div>
+                                </div>
+                                <div class="slider-container">
+                                    <input type="range" id="driver-seat-recline" min="0" max="100" value="30">
+                                    <span id="driver-seat-recline-value">30%</span>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">驾驶座椅腰部支撑</div>
+                                    <div class="setting-description">调整腰部支撑强度</div>
+                                </div>
+                                <div class="slider-container">
+                                    <input type="range" id="driver-seat-lumbar" min="0" max="100" value="50">
+                                    <span id="driver-seat-lumbar-value">50%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 方向盘设置 -->
+                    <div class="settings-section">
+                        <h4><i class="fas fa-steering-wheel"></i> 方向盘设置</h4>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">方向盘位置</div>
+                                    <div class="setting-description">调整方向盘位置</div>
+                                </div>
+                                <select id="steering-wheel-position" class="setting-select">
+                                    <option value="normal">标准</option>
+                                    <option value="sport">运动</option>
+                                    <option value="comfort">舒适</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">方向盘高度</div>
+                                    <div class="setting-description">调整方向盘高度</div>
+                                </div>
+                                <div class="slider-container">
+                                    <input type="range" id="steering-wheel-height" min="0" max="100" value="50">
+                                    <span id="steering-wheel-height-value">50%</span>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">方向盘伸缩</div>
+                                    <div class="setting-description">调整方向盘伸缩距离</div>
+                                </div>
+                                <div class="slider-container">
+                                    <input type="range" id="steering-wheel-telescope" min="0" max="100" value="50">
+                                    <span id="steering-wheel-telescope-value">50%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 空调设置 -->
+                    <div class="settings-section">
+                        <h4><i class="fas fa-snowflake"></i> 空调设置</h4>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">驾驶侧温度</div>
+                                    <div class="setting-description">调整驾驶侧空调温度</div>
+                                </div>
+                                <div class="temp-control">
+                                    <button class="temp-btn" onclick="adjustTemp('driver', -0.5)">-</button>
+                                    <span id="driver-temp-display">22.0°C</span>
+                                    <button class="temp-btn" onclick="adjustTemp('driver', 0.5)">+</button>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">副驾驶侧温度</div>
+                                    <div class="setting-description">调整副驾驶侧空调温度</div>
+                                </div>
+                                <div class="temp-control">
+                                    <button class="temp-btn" onclick="adjustTemp('passenger', -0.5)">-</button>
+                                    <span id="passenger-temp-display">22.0°C</span>
+                                    <button class="temp-btn" onclick="adjustTemp('passenger', 0.5)">+</button>
+                                </div>
+                            </div>
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">风速</div>
+                                    <div class="setting-description">调整空调风速</div>
+                                </div>
+                                <select id="ac-fan-speed" class="setting-select">
+                                    <option value="1">1档</option>
+                                    <option value="2">2档</option>
+                                    <option value="3">3档</option>
+                                    <option value="4">4档</option>
+                                    <option value="5">5档</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">空调模式</div>
+                                    <div class="setting-description">选择空调运行模式</div>
+                                </div>
+                                <select id="ac-mode" class="setting-select">
+                                    <option value="auto">自动</option>
+                                    <option value="manual">手动</option>
+                                    <option value="eco">节能</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 驾驶模式设置 -->
+                    <div class="settings-section">
+                        <h4><i class="fas fa-road"></i> 驾驶模式</h4>
+                        <div class="settings-grid">
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">驾驶模式</div>
+                                    <div class="setting-description">选择车辆驾驶模式</div>
+                                </div>
+                                <select id="drive-mode" class="setting-select">
+                                    <option value="normal">标准</option>
+                                    <option value="sport">运动</option>
+                                    <option value="eco">节能</option>
+                                    <option value="snow">雪地</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">悬挂模式</div>
+                                    <div class="setting-description">调整悬挂系统</div>
+                                </div>
+                                <select id="suspension-mode" class="setting-select">
+                                    <option value="normal">标准</option>
+                                    <option value="sport">运动</option>
+                                    <option value="comfort">舒适</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">转向模式</div>
+                                    <div class="setting-description">调整转向系统</div>
+                                </div>
+                                <select id="steering-mode" class="setting-select">
+                                    <option value="normal">标准</option>
+                                    <option value="sport">运动</option>
+                                    <option value="comfort">舒适</option>
+                                </select>
+                            </div>
+                            <div class="setting-item">
+                                <div>
+                                    <div class="setting-label">制动模式</div>
+                                    <div class="setting-description">调整制动系统</div>
+                                </div>
+                                <select id="brake-mode" class="setting-select">
+                                    <option value="normal">标准</option>
+                                    <option value="sport">运动</option>
+                                    <option value="comfort">舒适</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 通知设置 -->
+                <div id="notification-settings" class="settings-panel">
+                    <h3>通知设置</h3>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">系统通知</div>
+                            <div class="setting-description">接收系统更新和维护通知</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="system-notifications" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">安全提醒</div>
+                            <div class="setting-description">接收安全相关的提醒和警告</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="security-alerts" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">驾驶建议</div>
+                            <div class="setting-description">接收智能驾驶建议和路况提醒</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="driving-suggestions">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">营销信息</div>
+                            <div class="setting-description">接收产品更新和优惠信息</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="marketing-info">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 隐私安全设置 -->
+                <div id="privacy-settings" class="settings-panel">
+                    <h3>隐私安全</h3>
+                    <div class="info-card">
+                        <h4><i class="fas fa-shield-alt"></i> 数据保护</h4>
+                        <p>我们严格遵守数据保护法规，您的个人信息将被安全存储和传输。</p>
+                    </div>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">位置信息</div>
+                            <div class="setting-description">允许应用获取位置信息用于导航</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="location-permission" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">语音识别</div>
+                            <div class="setting-description">允许语音命令识别功能</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="voice-recognition" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">驾驶数据</div>
+                        </div>
+                        <button class="btn-secondary">导出数据</button>
+                    </div>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">删除账户</div>
+                        </div>
+                        <button class="btn-secondary" style="background: #e74c3c;">删除</button>
+                    </div>
+                </div>
+
+                <!-- 系统设置 -->
+                <div id="system-settings" class="settings-panel">
+                    <h3>系统设置</h3>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">主题模式</div>
+                            <div class="setting-description">选择深色或浅色主题</div>
+                        </div>
+                        <select id="theme-select" class="setting-select">
+                            <option value="dark">深色主题</option>
+                            <option value="light">浅色主题</option>
+                            <option value="auto">跟随系统</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">语言设置</div>
+                            <div class="setting-description">选择系统显示语言</div>
+                        </div>
+                        <select id="language-select" class="setting-select">
+                            <option value="zh-CN">简体中文</option>
+                            <option value="en-US">English</option>
+                        </select>
+                    </div>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">音量设置</div>
+                            <div class="setting-description">调整系统默认音量</div>
+                        </div>
+                        <div class="volume-slider">
+                            <input type="range" id="volume-slider" min="0" max="100" value="70">
+                            <span id="volume-value">70%</span>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <div>
+                            <div class="setting-label">自动锁屏</div>
+                            <div class="setting-description">设置自动锁屏时间</div>
+                        </div>
+                        <select id="auto-lock-select" class="setting-select">
+                            <option value="never">永不</option>
+                            <option value="1">1分钟</option>
+                            <option value="5">5分钟</option>
+                            <option value="15">15分钟</option>
+                            <option value="30">30分钟</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 关于系统 -->
+                <div id="about-settings" class="settings-panel">
+                    <h3>关于系统</h3>
+                    <div class="info-card">
+                        <h4><i class="fas fa-car"></i> 智能驾驶系统</h4>
+                        <p>版本：v1.0.0</p>
+                        <p>构建日期：2024年12月</p>
+                    </div>
+                    <div class="info-card">
+                        <h4><i class="fas fa-code"></i> 技术特性</h4>
+                        <p>• 智能语音控制</p>
+                        <p>• 实时导航系统</p>
+                        <p>• 多媒体娱乐</p>
+                        <p>• 环境监测</p>
+                        <p>• 安全防护</p>
+                    </div>
+                    <div class="info-card">
+                        <h4><i class="fas fa-heart"></i> 联系我们</h4>
+                        <p>邮箱：support@drivingsystem.com</p>
+                        <p>电话：400-888-8888</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
