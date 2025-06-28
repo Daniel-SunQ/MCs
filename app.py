@@ -12,6 +12,7 @@ from mutagen.flac import FLAC
 from mutagen.mp4 import MP4
 import hashlib # 用于生成唯一文件名
 import cv2
+from sympy import false
 import torch
 from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 from PIL import Image
@@ -43,6 +44,9 @@ from scipy.io.wavfile import write
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 import uuid
+import pygame
+from pygame import mixer
+import socket
 
 
 
@@ -54,8 +58,69 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', 'your-secret-key-here')
-CORS(app)
-socketio = SocketIO(app, cors_allowed_origins="*")
+
+# 配置CORS，允许所有源
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# 配置Socket.IO，允许所有源，并启用WebSocket
+socketio = SocketIO(app, 
+                   cors_allowed_origins="*",
+                   async_mode='threading',
+                   ping_timeout=60,
+                   ping_interval=25)
+
+simulator_socket = None
+simulator_thread = None
+event_loop = None
+is_running = True
+
+# 全局状态
+vehicle_state = {
+    'speed': 0.0,          # 速度 (km/h)
+    'direction': 'straight',  # 方向
+    'gear': 'P',           # 档位 (P/R/N/D)
+    'lights': {
+        'left_turn': False,   # 左转向灯
+        'right_turn': False,  # 右转向灯
+        'high_beam': False,   # 远光灯
+        'low_beam': False,    # 近光灯
+        'position': False,    # 位置灯
+        'fog': False,         # 雾灯
+        'warning': False      # 警示灯
+    },
+    'engine_temp': 25.0,   # 发动机温度 (°C)
+    'fuel_level': 100.0    # 油量百分比
+}
+
+ac_status = {
+    "ac_status": "off",
+    "driver_temp": 25,
+    "passenger_temp": 25,
+    "fan_speed": 1,
+    "mode": "auto"
+}
+
+media_status = {
+    "playing": False,
+    "current_track": None,
+    "volume": 0.7,
+    "playlist": [],
+    "shuffle": False,
+    "repeat": False
+}
+
+navigation_status = {
+    "active": False,
+    "destination": None,
+    "route": None,
+    "eta": None
+}
+
+voice_status = {
+    "listening": False,
+    "processing": False,
+    "speaking": False
+}
 
 # =======================================================================
 # =========================== DATABASE SETUP ============================
@@ -979,29 +1044,37 @@ def get_location_id(location):
     # 默认返回第一个location的id
     
 
-def get_now_weather(location):
-    location_id = get_location_id(location)
+def get_now_weather(location="重庆"):
+    """获取指定城市的当前天气
+    Args:
+        location: 城市名称，默认为重庆
+    Returns:
+        dict: 包含天气信息的字典
+    """
     try:
+        location_id = get_location_id(location)
         url = f"{url_api_weather}now?location={location_id}&key={os.getenv('QWEATHER_API_KEY')}"
         response = requests.get(url).json()
         data = {
+            'msg': f"{location}当前天气：温度{response['now']['temp']}度，{response['now']['text']}，湿度{response['now']['humidity']}%，{response['now']['windDir']}{response['now']['windSpeed']}级",
             '温度': response['now']['temp'],
             '湿度': response['now']['humidity'],
             '风速': response['now']['windSpeed'],
+            '风向': response['now']['windDir'],
             '天气': response['now']['text'],
             '体感温度': response['now']['feelsLike'],
+            '气压': response['now']['pressure'],
+            '能见度': response['now']['vis'],
         }
     except Exception as e:
         print(f"Error: {e}, return default now weather")
         data = {
-            'msg': '获取天气失败',
-            'weather': '获取天气失败',
+            'msg': f"抱歉，获取{location}天气信息失败",
+            '温度': '20',
+            '湿度': '50',
+            '风速': '10',
         }
-    result = {
-        'msg': data,
-        'weather': data,
-    }
-    return result
+    return data
 
 def get_forecast_weather_by_date(date, location):
     try:
@@ -1050,43 +1123,89 @@ navigation_status = {
 }
 #===============control_ac=============================
 def control_ac(action=None, value=None, zone='driver', delta=None, mode=None):
-    """
-    智能空调控制
+    """控制空调
+    Args:
+        action: 动作类型 ('set_temp', 'temp_up', 'temp_down', 'on', 'off', 'set_mode')
+        value: 温度值（用于set_temp）
+        zone: 区域 ('driver', 'passenger', 'all')
+        delta: 温度变化值（用于temp_up/temp_down）
+        mode: 空调模式 ('auto', 'cool', 'heat', 'ventilate')
+    Returns:
+        dict: 包含操作结果的字典
     """
     global ac_status
-    result = {}
-
-    # 区域处理
-    zones = [zone] if zone in ['driver', 'passenger'] else ['driver', 'passenger']
-
-    if action == 'set_temp' and value is not None:
-        for z in zones:
-            ac_status[f'{z}_temp'] = float(value)
-        result['msg'] = f"{'、'.join(zones)}温度已设为{value}度"
-    elif action == 'temp_up':
-        for z in zones:
-            ac_status[f'{z}_temp'] += float(delta) if delta else 1
-        result['msg'] = f"{'、'.join(zones)}温度已升高{delta or 1}度"
-    elif action == 'temp_down':
-        for z in zones:
-            ac_status[f'{z}_temp'] -= float(delta) if delta else 1
-        result['msg'] = f"{'、'.join(zones)}温度已降低{delta or 1}度"
-    elif action == 'on':
-        ac_status['ac_status'] = 'on'
-        result['msg'] = "空调已打开"
-    elif action == 'off':
-        ac_status['ac_status'] = 'off'
-        result['msg'] = "空调已关闭"
-    elif action == 'set_mode' and mode:
-        ac_status['ac_mode'] = mode
-        result['msg'] = f"空调已切换到{mode}模式"
-    else:
-        result['msg'] = "未识别的空调指令"
-
-    # 推送到前端
-    socketio.emit('ac_status', ac_status)
-    result['ac_status'] = ac_status
+    result = {'status': 'success', 'msg': ''}
+    
+    # 确定要调整的区域
+    zones = ['driver', 'passenger'] if zone == 'all' else [zone]
+    
+    try:
+        if action == 'set_temp' and value is not None:
+            temp = float(value)
+            # 限制温度范围在16-30度之间
+            temp = max(16, min(30, temp))
+            for z in zones:
+                ac_status[f'{z}_temp'] = temp
+            result['msg'] = f"{'、'.join(zones)}温度已设为{temp}度"
+            
+        elif action == 'temp_up':
+            delta_value = float(delta) if delta else 1
+            for z in zones:
+                current_temp = float(ac_status[f'{z}_temp'])
+                new_temp = min(30, current_temp + delta_value)
+                ac_status[f'{z}_temp'] = new_temp
+            result['msg'] = f"{'、'.join(zones)}温度已升高{delta_value}度"
+            
+        elif action == 'temp_down':
+            delta_value = float(delta) if delta else 1
+            for z in zones:
+                current_temp = float(ac_status[f'{z}_temp'])
+                new_temp = max(16, current_temp - delta_value)
+                ac_status[f'{z}_temp'] = new_temp
+            result['msg'] = f"{'、'.join(zones)}温度已降低{delta_value}度"
+            
+        elif action == 'on':
+            ac_status['ac_status'] = 'on'
+            result['msg'] = "空调已开启"
+            
+        elif action == 'off':
+            ac_status['ac_status'] = 'off'
+            result['msg'] = "空调已关闭"
+            
+        elif action == 'set_mode' and mode:
+            ac_status['mode'] = mode
+            result['msg'] = f"空调模式已设置为{mode}"
+            
+        else:
+            result = {'status': 'error', 'msg': '无效的空调控制命令'}
+            
+        # 通过WebSocket发送更新后的状态到前端
+        socketio.emit('ac_status_update', {
+            'status': ac_status,
+            'message': result['msg']
+        })
+        
+    except Exception as e:
+        result = {'status': 'error', 'msg': f'空调控制出错: {str(e)}'}
+        print(f"[AC Control Error] {str(e)}")
+    
     return result
+
+@socketio.on('connect')
+def handle_connect():
+    """客户端连接时，发送当前状态"""
+    socketio.emit('ac_status_update', {
+        'status': ac_status,
+        'message': '已连接空调控制系统'
+    })
+
+@socketio.on('request_ac_status')
+def handle_ac_status_request():
+    """响应前端的空调状态请求"""
+    socketio.emit('ac_status_update', {
+        'status': ac_status,
+        'message': '空调状态已更新'
+    })
 
 # ===============music_control function=================
 def music_control(action, song_id=None, volume=None, mode=None, shuffle=None):
@@ -1101,41 +1220,80 @@ def music_control(action, song_id=None, volume=None, mode=None, shuffle=None):
     """
     global music_player
     result = {}
+
+    # 检查播放列表是否为空
+    if not music_player["playlist"]:
+        music_player["playlist"] = scan_music_directory()
+        if not music_player["playlist"]:
+            result["msg"] = "播放列表为空，请先添加音乐文件"
+            return result
+
     if action == "play":
+        # 如果指定了歌曲ID，检查是否有效
         if song_id is not None:
-            music_player["current_song"] = int(song_id)
+            try:
+                song_id = int(song_id)
+                if 0 <= song_id < len(music_player["playlist"]):
+                    music_player["current_song"] = song_id
+                else:
+                    # 如果 song_id 超出范围，默认播放第一首
+                    music_player["current_song"] = 0
+            except (ValueError, TypeError):
+                # 如果 song_id 不是有效的整数，默认播放第一首
+                music_player["current_song"] = 0
+        # 如果没有指定歌曲ID且当前没有选中歌曲，默认播放第一首
+        elif music_player["current_song"] >= len(music_player["playlist"]):
+            music_player["current_song"] = 0
+            
         music_player["is_playing"] = True
         result["msg"] = f"正在播放：{music_player['playlist'][music_player['current_song']]['title']}"
+    
     elif action == "pause":
         music_player["is_playing"] = False
         result["msg"] = "音乐已暂停"
+    
     elif action == "next":
         if music_player["shuffle"]:
+            # 随机播放
             import random
             music_player["current_song"] = random.randint(0, len(music_player["playlist"]) - 1)
         else:
+            # 顺序播放
             music_player["current_song"] = (music_player["current_song"] + 1) % len(music_player["playlist"])
         result["msg"] = f"切换到：{music_player['playlist'][music_player['current_song']]['title']}"
+        # 自动开始播放
+        music_player["is_playing"] = True
+    
     elif action == "prev":
         if music_player["shuffle"]:
+            # 随机播放
             import random
             music_player["current_song"] = random.randint(0, len(music_player["playlist"]) - 1)
         else:
+            # 顺序播放
             music_player["current_song"] = (music_player["current_song"] - 1) % len(music_player["playlist"])
         result["msg"] = f"切换到：{music_player['playlist'][music_player['current_song']]['title']}"
+        # 自动开始播放
+        music_player["is_playing"] = True
+    
     elif action == "set_volume" and volume is not None:
         music_player["volume"] = max(0.0, min(1.0, float(volume)))
         result["msg"] = f"音量已设置为{int(music_player['volume']*100)}%"
+    
     elif action == "toggle_shuffle":
         music_player["shuffle"] = not music_player["shuffle"]
         result["msg"] = "随机播放已" + ("开启" if music_player["shuffle"] else "关闭")
+    
     elif action == "toggle_repeat":
         repeat_modes = ["none", "one", "all"]
         current_index = repeat_modes.index(music_player["repeat"])
         music_player["repeat"] = repeat_modes[(current_index + 1) % len(repeat_modes)]
         result["msg"] = f"循环模式：{music_player['repeat']}"
+    
     else:
         result["msg"] = "未识别的音乐操作"
+
+    # 更新状态
     result["music_status"] = {
         "current_song": music_player["current_song"],
         "is_playing": music_player["is_playing"],
@@ -1143,7 +1301,15 @@ def music_control(action, song_id=None, volume=None, mode=None, shuffle=None):
         "shuffle": music_player["shuffle"],
         "repeat": music_player["repeat"]
     }
+
+    # 通过 WebSocket 广播状态更新
+    socketio.emit('media_status_update', {
+        'status': result["music_status"],
+        'message': result["msg"]
+    })
+
     return result
+
 #===============other_functions=======================
 ##TODO: 添加其他函数，例如操控音乐，操控空调，或者操控导航等等
 
@@ -1161,13 +1327,43 @@ def navigation_control(action, destination=None):
     if action in ["start", "start_navigation"] and destination:
         navigation_status["navigating"] = True
         navigation_status["destination"] = destination
-        result["msg"] = f"已开始导航到：{destination}"
+        # 发送 WebSocket 事件，通知前端打开导航界面并搜索
+        socketio.emit('navigation_control', {
+            'action': 'open_and_search',
+            'destination': destination
+        })
+        # 等待前端返回导航信息
+        time.sleep(2)  # 给前端一些时间处理导航请求
+        
+        if navigation_status.get('error'):
+            result["msg"] = f"导航失败：{navigation_status['error']}"
+            navigation_status["navigating"] = False
+            navigation_status["destination"] = ""
+        else:
+            # 构建导航信息
+            distance = navigation_status.get('distance', '未知')
+            duration = navigation_status.get('duration', '未知')
+            steps = navigation_status.get('steps', [])
+            
+            msg = f"已开始导航到{destination}，"
+            msg += f"距离约{distance}公里，预计需要{duration}分钟。\n"
+            if steps:
+                msg += "接下来您需要：\n"
+                msg += "\n".join(f"{i+1}. {step}" for i, step in enumerate(steps))
+            
+            result["msg"] = msg
+            
     elif action in ["stop", "stop_navigation"]:
         navigation_status["navigating"] = False
         navigation_status["destination"] = ""
         result["msg"] = "已停止导航"
+        # 发送 WebSocket 事件，通知前端停止导航
+        socketio.emit('navigation_control', {
+            'action': 'stop'
+        })
     else:
         result["msg"] = "未识别的导航操作"
+    
     result["navigation_status"] = navigation_status
     return result
 
@@ -1272,7 +1468,9 @@ tools = [
                     },
                     'song_id': {
                         'type': 'integer',
-                        'description': '歌曲ID，切歌/播放时用'
+                        'description': '歌曲ID，切歌/播放时用，必须是0到播放列表长度减1之间的整数，如果超出范围会默认播放第一首歌',
+                        'minimum': 0,
+                        'maximum': 100
                     },
                     'volume': {
                         'type': 'number',
@@ -1363,7 +1561,7 @@ def detect_wake_word_enhanced():
         
         # 优化录音器设置
         recorder = PvRecorder(
-            device_index=0, 
+            device_index=1, 
             frame_length=porcupine.frame_length
         )
         
@@ -1372,7 +1570,7 @@ def detect_wake_word_enhanced():
         
         # 添加连续检测逻辑，减少误触发
         detection_count = 0
-        required_detections = 2  # 需要连续检测到2次才确认
+        required_detections = 1  # 需要连续检测到2次才确认
         
         try:
             while True:
@@ -1475,7 +1673,7 @@ def detect_wake_word_adaptive():
         )
         
         recorder = PvRecorder(
-            device_index=0, 
+            device_index=1, 
             frame_length=porcupine.frame_length
         )
         
@@ -1551,46 +1749,110 @@ def recognize(wav_path):
     return transcript.strip()
 
 def llm(user_text):
+    """处理用户输入，调用大模型获取回复
+    Args:
+        user_text: 用户输入的文本
+    Returns:
+        str: 大模型的回复
     """
-    调用原有Function calling和大模型推理逻辑，返回AI回复字符串。
-    user_text: 用户语音识别后的文本
-    """
-    if user_text == "":
-        print("请重新说话")
-        return
-    messages = [{"role": "user", "content": user_text }]
-    messages.append({"role": "assistant", "content": "好的，我来帮您处理这些请求。"})
+    messages = [{"role": "user", "content": user_text + '，你是一个车载语音助手，回复指令时可以大胆调用工具，不要担心工具调用失败，最后给我一个精简的回复'}]
     print(f"【用户信息】: {messages}")
-    response = call_llama(messages)
-    print(f"大模型回复【1】: {getattr(response, 'message', response)}")
-    # 检查是否有tool_calls
-    if hasattr(response, 'message') and getattr(response.message, 'tool_calls', None):
-        for tool_call in response.message.tool_calls:
-            if functoin_to_call := avaliable_functions.get(tool_call.function.name):
-                print(f"【调用函数】: {tool_call.function.name}, 参数: {tool_call.function.arguments}")
-                result = functoin_to_call(**tool_call.function.arguments)                 
-                print(f"【函数返回】: {result}")
-                messages.append({"role": "tool", "name": tool_call.function.name, "content": str(result.get('msg', ''))})
-        print(f"【合并后的信息】: {messages}")
-        final_reply = call_llama_without_tool(messages)
-        print(f"大模型回复【2】: {final_reply.message.content}")  
-        return final_reply.message.content
-    else:
-        return response.message.content
+    
+    # 调用大模型
+    try:
+        response = call_llama(messages)
+        print(f"大模型回复【1】: {response.message}")
+        
+        # 检查是否有tool_calls
+        if hasattr(response, 'message') and getattr(response.message, 'tool_calls', None):
+            # 记录已处理的函数调用，避免重复
+            processed_calls = set()
+            
+            for tool_call in response.message.tool_calls:
+                # 生成唯一标识（函数名+参数）
+                call_id = f"{tool_call.function.name}:{str(tool_call.function.arguments)}"
+                
+                # 跳过重复的调用
+                if call_id in processed_calls:
+                    continue
+                processed_calls.add(call_id)
+                
+                if functoin_to_call := avaliable_functions.get(tool_call.function.name):
+                    try:
+                        print(f"【调用函数】: {tool_call.function.name}, 参数: {tool_call.function.arguments}")
+                        result = functoin_to_call(**tool_call.function.arguments)
+                        messages.append({"role": "tool", "name": tool_call.function.name, "content": str(result.get('msg', ''))})
+                        print(f"【函数返回】: {result}")
+                    except Exception as e:
+                        error_msg = f"Error: {str(e)}"
+                        print(error_msg)
+                        messages.append({"role": "tool", "name": tool_call.function.name, "content": error_msg})
+            
+            # 获取最终回复
+            final_reply = call_llama_without_tool(messages)
+            if '</think>' in str(final_reply.message.content):
+                return str(final_reply.message.content).split('</think>')[1].strip()
+            return final_reply.message.content
+    except Exception as e:
+        print(f"Error: {e}, llm failed")
+        return "抱歉，我现在无法正确理解您的请求。"
+    
+    return response.message.content
 
-def tts_and_play(text, filename="static/voice/tts_output.mp3"):
+def tts_and_play(text, filename=None):
+    if filename is None:
+        # 生成临时文件名
+        temp_dir = "static/voice"
+        os.makedirs(temp_dir, exist_ok=True)
+        filename = os.path.join(temp_dir, f"tts_{uuid.uuid4().hex}.mp3")
+
     async def tts_task():
-        print(f"text: {text}")
+        print(f"[TTS] 合成文本: {text}")
         communicate = edge_tts.Communicate(text=text, voice="zh-CN-XiaoxiaoNeural")
         await communicate.save(filename)
+    
+    # 运行 TTS 合成
     asyncio.run(tts_task())
 
-    audio = MP3(filename)
-    duration = audio.info.length
+    # 推送播放状态到前端（可选）
+    try:
+        audio = MP3(filename)
+        duration = audio.info.length
+        socketio.emit('voice_status', {'status': 'streaming', 'text': text, 'duration': duration})
+    except Exception:
+        duration = None
 
-    socketio.emit('voice_status', {'status': 'streaming', 'text': text, 'duration': duration})
-    threading.Thread(target=playsound, args=(filename,), daemon=True).start()
+    # 定义播放并在结束后删除文件的包装函数
+    def _play_and_cleanup(path):
+        try:
+            # 初始化 pygame mixer
+            if not pygame.get_init():
+                pygame.init()
+            if not mixer.get_init():
+                mixer.init()
+            
+            # 加载并播放音频
+            mixer.music.load(path)
+            mixer.music.play()
+            
+            # 等待播放完成
+            while mixer.music.get_busy():
+                pygame.time.Clock().tick(10)
+            
+            # 停止播放并卸载
+            mixer.music.stop()
+            mixer.music.unload()
+        except Exception as e:
+            print(f"[TTS] 播放音频失败: {e}")
+        finally:
+            try:
+                os.remove(path)
+                print(f"[TTS] 已删除临时音频文件: {path}")
+            except Exception as e:
+                print(f"[TTS] 删除文件失败: {e}")
     
+    # 后台线程播放并自动清理
+    threading.Thread(target=_play_and_cleanup, args=(filename,), daemon=True).start()
 
 # 语音主流程线程
 voice_status_queue = queue.Queue()
@@ -1642,11 +1904,158 @@ def user_center():
         return redirect(url_for('login'))
     return render_template('user_center.html', user=user)
 
+# 添加导航信息的 WebSocket 处理器
+@socketio.on('navigation_info')
+def handle_navigation_info(data):
+    global navigation_status
+    if data.get('error'):
+        navigation_status['error'] = data['message']
+    else:
+        navigation_status.update(data)
+
+@socketio.on('gear_change')
+def handle_gear_change(data):
+    """处理档位变更"""
+    print(f"档位变更: {data}")
+    # 广播档位变更
+    socketio.emit('vehicle_status_update', {'status': data})
+
+@socketio.on('lights_change')
+def handle_lights_change(data):
+    """处理灯光变更"""
+    print(f"灯光变更: {data}")
+    # 广播灯光变更
+    socketio.emit('vehicle_status_update', {'status': data})
+
+#====================模拟器通信====================
+def connect_to_simulator():
+    """连接到模拟器"""
+    global simulator_socket
+    try:
+        simulator_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        simulator_socket.connect(('localhost', 5001))  # 连接到模拟器的新端口
+        simulator_socket.setblocking(False)
+        print("已连接到模拟器")
+        return True
+    except Exception as e:
+        print(f"连接模拟器失败: {e}")
+        if simulator_socket:
+            simulator_socket.close()
+            simulator_socket = None
+        return False
+def receive_simulator_data():
+    """接收模拟器数据"""
+    global simulator_socket, is_running
+    
+    while is_running:
+        try:
+            if simulator_socket:
+                try:
+                    # 接收数据
+                    data = simulator_socket.recv(1024)
+                    if data:
+                        try:
+                            # 解析并处理数据
+                            simulator_data = json.loads(data.decode())
+                            print(f"收到模拟器数据: {simulator_data}")
+                            # 通过WebSocket广播状态
+                            formatted_data = {
+                                'status': simulator_data['state'],
+                                'message': '已接收模拟器数据',
+                                'timestamp': simulator_data['timestamp']
+                            }
+                            socketio.emit('simulator_update', formatted_data, namespace='/')
+                        except json.JSONDecodeError:
+                            print("无效的JSON数据")
+                        except Exception as e:
+                            print(f"处理模拟器数据时出错: {e}")
+                    else:
+                        # 连接断开，尝试重连
+                        print("模拟器连接断开，尝试重连...")
+                        simulator_socket.close()
+                        simulator_socket = None
+                        time.sleep(2)
+                        connect_to_simulator()
+                except BlockingIOError:
+                    # 非阻塞模式下没有数据可读
+                    time.sleep(0.1)
+                except Exception as e:
+                    print(f"接收数据时出错: {e}")
+                    time.sleep(0.1)
+            else:
+                # 如果没有连接，尝试重连
+                if connect_to_simulator():
+                    print("重新连接成功")
+                else:
+                    time.sleep(2)
+        except Exception as e:
+            print(f"处理模拟器数据时出错: {e}")
+            time.sleep(0.1)
 
 
-if __name__ == "__main__":
-    # 初始化数据库
-    init_database()
-    # 启动语音循环
-    threading.Thread(target=voice_loop, daemon=True).start()
-    socketio.run(app, debug=True, host="0.0.0.0", port=5001, use_reloader=False)
+
+def run_simulator_loop():
+    """运行模拟器数据接收循环"""
+    try:
+        receive_simulator_data()
+    except Exception as e:
+        print(f"模拟器循环出错: {e}")
+    finally:
+        if simulator_socket:
+            simulator_socket.close()
+
+def start_simulator_connection():
+    """启动模拟器连接"""
+    global simulator_thread, is_running
+    
+    is_running = True
+    if connect_to_simulator():
+        # 创建并启动模拟器数据接收线程
+        simulator_thread = threading.Thread(target=run_simulator_loop)
+        simulator_thread.daemon = True
+        simulator_thread.start()
+        return True
+    return False
+
+# 在if __name__ == '__main__'部分之前添加
+def stop_simulator_connection():
+    """停止模拟器连接"""
+    global is_running, simulator_socket, event_loop
+    
+    is_running = False
+    if simulator_socket:
+        simulator_socket.close()
+        simulator_socket = None
+    
+    if event_loop and event_loop.is_running():
+        event_loop.stop()
+
+# 修改main部分
+# Socket.IO事件处理
+@socketio.on('connect')
+def handle_connect():
+    print('客户端已连接')
+    socketio.emit('server_response', {'data': '连接成功！'})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('客户端断开连接')
+
+
+if __name__ == '__main__':
+    try:
+        # 初始化数据库
+        init_database()
+        
+        # 启动模拟器连接
+        start_simulator_connection()
+
+        
+        # 启动Flask应用（使用不同的端口）
+        socketio.run(app, host='0.0.0.0', port=8080, debug=False)
+    except KeyboardInterrupt:
+        print("\n正在停止服务...")
+        stop_simulator_connection()
+    except Exception as e:
+        print(f"启动失败: {e}")
+        stop_simulator_connection()

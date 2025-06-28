@@ -6,8 +6,13 @@
     <title>智能车机系统</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- 添加Socket.IO客户端库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
 </head>
 <body>
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
+
     <!-- ======================================================================= -->
     <!-- ======================= NEW MODERN UI CONTAINER ======================= -->
     <!-- ======================================================================= -->
@@ -29,7 +34,10 @@
                     <span id="gear-p" class="active">P</span><span id="gear-r">R</span><span id="gear-n">N</span><span id="gear-d">D</span>
                 </div>
                 <div id="lights-display" class="status-item lights">
-                    <i id="light-high-beam" class="fas fa-sun"></i><i id="light-low-beam" class="fas fa-moon"></i>
+                    <i id="light-left-turn" class="fas fa-arrow-left"></i>
+                    <i id="light-high-beam" class="fas fa-sun"></i>
+                    <i id="light-low-beam" class="fas fa-moon"></i>
+                    <i id="light-right-turn" class="fas fa-arrow-right"></i>
                 </div>
             </div>
             <div class="status-bar-right">
@@ -220,6 +228,68 @@
             <div class="module" id="apps-module" style="display: none;">
                 <button class="close-module-btn"><i class="fas fa-times"></i></button>
                 <h2>车载应用</h2><p>内容待添加...</p>
+            </div>
+
+            <!-- 在 module-container 中添加新模块 -->
+            <div id="gear-lights-module" class="module">
+                <div class="module-header">
+                    <h2>档位与灯光控制</h2>
+                    <button class="close-module-btn"><i class="fas fa-times"></i></button>
+                </div>
+                <div class="module-content gear-lights-content">
+                    <!-- 档位控制 -->
+                    <div class="control-section gear-section">
+                        <h3>档位控制</h3>
+                        <div class="gear-controls">
+                            <button class="gear-btn" data-gear="P">P</button>
+                            <button class="gear-btn" data-gear="R">R</button>
+                            <button class="gear-btn" data-gear="N">N</button>
+                            <button class="gear-btn" data-gear="D">D</button>
+                        </div>
+                        <div class="gear-info">
+                            <p>当前档位：<span id="current-gear">P</span></p>
+                        </div>
+                    </div>
+                    
+                    <!-- 灯光控制 -->
+                    <div class="control-section lights-section">
+                        <h3>灯光控制</h3>
+                        <div class="lights-controls">
+                            <button class="light-btn" data-light="off">
+                                <i class="fas fa-lightbulb"></i>
+                                <span>关闭</span>
+                            </button>
+                            <button class="light-btn" data-light="left-turn">
+                                <i class="fas fa-arrow-left"></i>
+                                <span>左转向</span>
+                            </button>
+                            <button class="light-btn" data-light="right-turn">
+                                <i class="fas fa-arrow-right"></i>
+                                <span>右转向</span>
+                            </button>
+                            <button class="light-btn" data-light="position">
+                                <i class="fas fa-parking"></i>
+                                <span>位置灯</span>
+                            </button>
+                            <button class="light-btn" data-light="low">
+                                <i class="fas fa-moon"></i>
+                                <span>近光灯</span>
+                            </button>
+                            <button class="light-btn" data-light="high">
+                                <i class="fas fa-sun"></i>
+                                <span>远光灯</span>
+                            </button>
+                            <button class="light-btn" data-light="fog">
+                                <i class="fas fa-smog"></i>
+                                <span>雾灯</span>
+                            </button>
+                            <button class="light-btn" data-light="emergency">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                <span>警示灯</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
