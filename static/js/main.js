@@ -35,17 +35,22 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('尝试重新连接...');
     });
 
-
-
+    // 添加用户交互状态跟踪
+    let hasUserInteraction = false;
+    document.addEventListener('click', () => {
+        hasUserInteraction = true;
+    }, { once: true });
 
     // Listen for media status updates
-    socket.on('media_status_update', (data) => {
+    socket.on('media_status_update', function(data) {
         if (data.status) {
             const { current_song, is_playing } = data.status;
             if (is_playing && current_song !== currentSongIndex) {
                 loadAndPlay(current_song);
             } else if (is_playing && !isPlaying) {
-                audioPlayer.play();
+                if (hasUserInteraction) {
+                    audioPlayer.play().catch(console.error);
+                }
                 isPlaying = true;
                 updateUI();
             } else if (!is_playing && isPlaying) {
@@ -292,35 +297,69 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    async function loadAndPlay(index) {
-        currentSongIndex = index;
-        const song = currentPlaylist[currentSongIndex];
-        audioPlayer.src = song.file_path;
-        
-        // Reset and fetch lyrics
-        musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">歌词加载中...</p>';
-        parsedLyrics = [];
-        if (song.has_lyrics) {
-            try {
-                const response = await fetch(`/api/music/lyrics/${song.id}`);
-                const data = await response.json();
-                if (data.lyrics) {
-                    parsedLyrics = parseLyrics(data.lyrics);
-                    renderLyrics();
-                } else {
-                     musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">此歌曲暂无歌词</p>';
+    async function loadAndPlay(songId) {
+        try {
+            currentSongIndex = songId;
+            const song = currentPlaylist[currentSongIndex];
+            audioPlayer.src = song.file_path;
+            
+            // Reset and fetch lyrics
+            musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">歌词加载中...</p>';
+            parsedLyrics = [];
+            if (song.has_lyrics) {
+                try {
+                    const response = await fetch(`/api/music/lyrics/${song.id}`);
+                    const data = await response.json();
+                    if (data.lyrics) {
+                        parsedLyrics = parseLyrics(data.lyrics);
+                        renderLyrics();
+                    } else {
+                        musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">此歌曲暂无歌词</p>';
+                    }
+                } catch (error) {
+                    console.error('获取歌词失败:', error);
+                    musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">歌词加载失败</p>';
                 }
-            } catch (error) {
-                console.error('获取歌词失败:', error);
-                musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">歌词加载失败</p>';
+            } else {
+                musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">此歌曲暂无歌词</p>';
             }
-        } else {
-            musicPlayerElements.lyricsContainer.innerHTML = '<p class="lyrics-line">此歌曲暂无歌词</p>';
+            
+            if (hasUserInteraction) {
+                // 如果已有用户交互，直接播放
+                await audioPlayer.play();
+                isPlaying = true;
+                updateUI();
+            } else {
+                // 如果没有用户交互，显示一个临时播放按钮
+                const playButton = document.createElement('button');
+                playButton.textContent = '点击开始播放';
+                playButton.style.position = 'fixed';
+                playButton.style.top = '50%';
+                playButton.style.left = '50%';
+                playButton.style.transform = 'translate(-50%, -50%)';
+                playButton.style.padding = '15px 30px';
+                playButton.style.backgroundColor = '#4CAF50';
+                playButton.style.color = 'white';
+                playButton.style.border = 'none';
+                playButton.style.borderRadius = '5px';
+                playButton.style.cursor = 'pointer';
+                playButton.style.zIndex = '9999';
+                
+                playButton.onclick = async () => {
+                    hasUserInteraction = true;
+                    await audioPlayer.play();
+                    isPlaying = true;
+                    updateUI();
+                    playButton.remove();
+                };
+                
+                document.body.appendChild(playButton);
+            }
+        } catch (error) {
+            console.error('播放失败:', error);
+            isPlaying = false;
+            updateUI();
         }
-
-        audioPlayer.play();
-        isPlaying = true;
-        updateUI();
     }
     
     function renderLyrics() {
@@ -656,37 +695,44 @@ document.addEventListener('DOMContentLoaded', () => {
     function searchAndNavigate() {
         const address = mapSearchInput.value;
         if (!address) {
-            console.log("请输入目的地");
-            return;
-        }
-        if (!map || !geolocation) {
-            console.error("地图或定位功能尚未初始化！");
-            alert("地图服务正在初始化，请稍后再试。");
+            mapPanel.innerHTML = '<div style="padding: 20px; color: #ff8a8a;">请输入目的地</div>';
             return;
         }
 
-        if (driving) driving.clear();
-        mapPanel.innerHTML = ""; 
+        // 初始化定位对象
+        const geolocation = new AMap.Geolocation({
+            enableHighAccuracy: true,
+            timeout: 10000,
+            buttonPosition: 'RB',
+            buttonOffset: new AMap.Pixel(10, 20),
+            zoomToAccuracy: true
+        });
 
-        // 1. Use the single, pre-initialized geolocation instance
+        // 获取当前位置
         geolocation.getCurrentPosition((status, result) => {
-            if (status === 'complete') {
-                const startPoint = result.position;
+            if (status === 'complete' && result && result.position) {
+                const startPoint = [result.position.lng, result.position.lat];
                 
-                const placeSearch = new AMap.PlaceSearch();
+                // 安全地获取城市信息
+                const city = result.addressComponent && result.addressComponent.city ? result.addressComponent.city : '全国';
+                
+                const placeSearch = new AMap.PlaceSearch({
+                    city: city
+                });
+                
                 placeSearch.search(address, (searchStatus, searchResult) => {
-                    if (searchStatus === 'complete' && searchResult.poiList.pois.length > 0) {
+                    if (searchStatus === 'complete' && searchResult && searchResult.poiList && searchResult.poiList.pois.length > 0) {
                         const endPoint = searchResult.poiList.pois[0].location;
                         
                         driving = new AMap.Driving({
                             map: map,
                             panel: "map-panel",
-                            policy: AMap.DrivingPolicy.LEAST_TIME, 
+                            policy: AMap.DrivingPolicy.LEAST_TIME,
                             autoFitView: true
                         });
                         
                         driving.search(startPoint, endPoint, (drivingStatus, drivingResult) => {
-                            if (drivingStatus === 'complete') {
+                            if (drivingStatus === 'complete' && drivingResult && drivingResult.routes && drivingResult.routes.length > 0) {
                                 console.log('成功获取驾车方案列表');
                                 // 获取第一条路线的信息
                                 const route = drivingResult.routes[0];
@@ -700,7 +746,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 // 发送导航信息到后端
                                 socket.emit('navigation_info', navigationInfo);
                             } else {
-                                console.error('获取驾车方案失败：' + drivingResult);
+                                console.error('获取驾车方案失败：', drivingResult);
                                 mapPanel.innerHTML = `<div style="padding: 20px; color: #ff8a8a;">获取驾车方案失败，请稍后重试。</div>`;
                                 socket.emit('navigation_info', {
                                     error: true,
@@ -708,9 +754,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                 });
                             }
                         });
-
                     } else {
-                        console.error('搜索目的地失败：' + searchResult);
+                        console.error('搜索目的地失败：', searchResult);
                         mapPanel.innerHTML = `<div style="padding: 20px; color: #ff8a8a;">未能找到目的地："${address}"。</div>`;
                         socket.emit('navigation_info', {
                             error: true,
@@ -718,13 +763,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         });
                     }
                 });
-
             } else {
-                console.error('获取当前位置失败: ' + result.message);
-                alert('定位失败: ' + result.message + '\n\n请按照提示检查您的浏览器或操作系统的定位权限。');
+                const errorMsg = result && result.message ? result.message : '定位失败，请检查定位权限';
+                console.error('获取当前位置失败:', errorMsg);
+                mapPanel.innerHTML = `<div style="padding: 20px; color: #ff8a8a;">${errorMsg}</div>`;
                 socket.emit('navigation_info', {
                     error: true,
-                    message: '定位失败，请检查定位权限'
+                    message: errorMsg
                 });
             }
         });
@@ -1369,7 +1414,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (response.status) {
             Object.keys(response.status).forEach(key => {
                 if (response.status[key] !== undefined) {
-                    acStatus[key] = response.status[key];
+                    // 确保布尔值正确处理
+                    if (typeof response.status[key] === 'boolean') {
+                        acStatus[key] = response.status[key];
+                    } else if (response.status[key] === 'true' || response.status[key] === 'false') {
+                        acStatus[key] = response.status[key] === 'true';
+                    } else {
+                        acStatus[key] = response.status[key];
+                    }
                 }
             });
         }
@@ -1431,15 +1483,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // 获取所有按钮
         const buttons = {
             '自动模式': acStatus.ac_mode === 'auto',
-            '同步温度': acStatus.sync_mode,
-            '内外循环': acStatus.ac_circulation === 'true',
-            '前窗除雾': acStatus.defrost
+            '同步温度': Boolean(acStatus.sync_mode), // 确保是布尔值
+            '内外循环': acStatus.ac_circulation === 'true' || acStatus.ac_circulation === true,
+            '前窗除雾': Boolean(acStatus.defrost)
         };
 
         // 更新每个按钮的状态
         Object.entries(buttons).forEach(([title, state]) => {
             const btn = document.querySelector(`.middle-ctrl-btn[title="${title}"]`);
             if (btn) {
+                console.log(`Updating button ${title} state to:`, state);
                 btn.classList.toggle('active', state);
             }
         });
@@ -1727,7 +1780,7 @@ document.addEventListener('DOMContentLoaded', () => {
         rightTurn.classList.toggle('active', activeLights.has('right-turn'));
     }
 
-        // 监听模拟器数据更新
+    // 监听模拟器数据更新
     socket.on('simulator_update', (response) => {
         console.log('收到模拟器数据:', response);      
         if (response.status) {
@@ -1744,16 +1797,15 @@ document.addEventListener('DOMContentLoaded', () => {
             
             console.log('车辆状态:', formattedState);
             
-            // TODO: 在这里添加更新UI的代码
+            // 更新灯光状态
             if(state.lights){          
-                    // 遍历服务器返回的灯光状态
+                // 遍历服务器返回的灯光状态
                 Object.entries(state.lights).forEach(([lightKey, isOn]) => {
                     // 根据灯光键名找到对应的按钮
                     let buttonSelector;
                     switch(lightKey) {
                         case 'left_turn':
                             buttonSelector = '.light-btn[data-light="left-turn"]';
-                            
                             break;
                         case 'right_turn':
                             buttonSelector = '.light-btn[data-light="right-turn"]';
@@ -1764,57 +1816,90 @@ document.addEventListener('DOMContentLoaded', () => {
                         case 'low_beam':
                             buttonSelector = '.light-btn[data-light="low"]';
                             break;
+                        case 'position':
+                            buttonSelector = '.light-btn[data-light="position"]';
+                            break;
+                        case 'fog':
+                            buttonSelector = '.light-btn[data-light="fog"]';
+                            break;
+                        case 'warning':
+                            buttonSelector = '.light-btn[data-light="emergency"]';
+                            break;
                         default:
                             return; // 跳过未知的灯光类型
                     }
                     
                     const targetButton = document.querySelector(buttonSelector);
+                    const offButton = document.querySelector('.light-btn[data-light="off"]');
+                    
+                    // 检查按钮是否存在
+                    if (!targetButton) {
+                        console.warn(`未找到灯光按钮: ${buttonSelector}`);
+                        return;
+                    }
+                    
                     if (targetButton.classList.contains('active')) {
-                        if (!isOn) {   
+                        if (!isOn) {
                             targetButton.classList.remove('active');
-                            if (lightKey === 'high_beam' || lightKey === 'low_beam'){
+                            if(lightKey === 'high_beam' || lightKey === 'low_beam'){
                                 activeLights.delete(lightKey.replace('_beam', ''));
                             }
                             else{
                                 activeLights.delete(lightKey.replace('_', '-'));
                             }
-                            document.querySelector('.light-btn[data-light="off"]').classList.add('active');
-                            showToast(lightKey+'灯已关闭');
-                        }
+                            if (offButton) {
+                                offButton.classList.add('active');
+                            }
+                            showToast('已关闭'+lightKey);
+                            socket.emit('lights_change', { lights: Array.from(activeLights) });
+                        } 
                     }
                     else{
-                        if (isOn) {
+                        if(isOn){
                             targetButton.classList.add('active');
-                            if (lightKey === 'high_beam' || lightKey === 'low_beam'){
+                            if(lightKey === 'high_beam' || lightKey === 'low_beam'){
                                 activeLights.add(lightKey.replace('_beam', ''));
                             }
                             else{
                                 activeLights.add(lightKey.replace('_', '-'));
                             }
-                            document.querySelector('.light-btn[data-light="off"]').classList.remove('active');
-                            showToast('已开启'+lightKey+'灯');
+                            if (offButton) {
+                                offButton.classList.remove('active');
+                            }
+                            showToast('已开启'+lightKey);
+                            socket.emit('lights_change', { lights: Array.from(activeLights) });
                         }
                     }
-                     //更新状态栏
                     updateLightsDisplay();
                     console.log('activeLights:', activeLights);
-                });  
+
+                });
             }
+            
+            // 更新档位状态
             if(state.gear){
                 const gearButton = document.querySelector(`.gear-btn[data-gear="${state.gear}"]`);
+
                 if (gearButton) {
+                    // 移除所有档位按钮的active状态
+                    document.querySelectorAll('.gear-btn').forEach(btn => btn.classList.remove('active'));
+                    // 移除状态栏所有档位的激活状态
+                    document.querySelectorAll('#gear-display span').forEach(span => span.classList.remove('active'));
+                    // 添加当前档位的active状态
                     gearButton.classList.add('active');
+                    document.getElementById(`gear-${state.gear.toLowerCase()}`).classList.add('active');
                     currentGear = state.gear;
                     currentGearSpan.textContent = state.gear;
                     showToast(`已切换到 ${state.gear} 档`);
+                    socket.emit('gear_change', { gear: state.gear });
                 }
             }
         }
         
-        
         // 显示消息
         if (response.message) {
             console.log('消息:', response.message);
+           
         }
         
         // 显示时间戳

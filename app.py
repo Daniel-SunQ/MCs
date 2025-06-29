@@ -92,13 +92,7 @@ vehicle_state = {
     'fuel_level': 100.0    # 油量百分比
 }
 
-ac_status = {
-    "ac_status": "off",
-    "driver_temp": 25,
-    "passenger_temp": 25,
-    "fan_speed": 1,
-    "mode": "auto"
-}
+
 
 media_status = {
     "playing": False,
@@ -109,12 +103,7 @@ media_status = {
     "repeat": False
 }
 
-navigation_status = {
-    "active": False,
-    "destination": None,
-    "route": None,
-    "eta": None
-}
+
 
 voice_status = {
     "listening": False,
@@ -1116,6 +1105,8 @@ ac_status = {
     'ac_status': 'on',
     'ac_mode': 'auto',
     'ac_circulation': 'false',
+    'sync_mode': False,
+    'mode': 'auto'
 }
 navigation_status = {
     'navigating': False,
@@ -1125,11 +1116,11 @@ navigation_status = {
 def control_ac(action=None, value=None, zone='driver', delta=None, mode=None):
     """控制空调
     Args:
-        action: 动作类型 ('set_temp', 'temp_up', 'temp_down', 'on', 'off', 'set_mode')
+        action: 动作类型 ('set_temp', 'temp_up', 'temp_down', 'on', 'off', 'set_mode', 'sync')
         value: 温度值（用于set_temp）
         zone: 区域 ('driver', 'passenger', 'all')
         delta: 温度变化值（用于temp_up/temp_down）
-        mode: 空调模式 ('auto', 'cool', 'heat', 'ventilate')
+        mode: 空调模式 ('auto', 'cool', 'heat', 'ventilate', 'sync')
     Returns:
         dict: 包含操作结果的字典
     """
@@ -1144,25 +1135,44 @@ def control_ac(action=None, value=None, zone='driver', delta=None, mode=None):
             temp = float(value)
             # 限制温度范围在16-30度之间
             temp = max(16, min(30, temp))
-            for z in zones:
-                ac_status[f'{z}_temp'] = temp
-            result['msg'] = f"{'、'.join(zones)}温度已设为{temp}度"
+            # 如果是同步模式，或者是驾驶员温度调节，同时更新两个区域
+            if ac_status['sync_mode'] or zone == 'driver':
+                ac_status['driver_temp'] = str(temp)
+                ac_status['passenger_temp'] = str(temp)
+                result['msg'] = f"温度已设为{temp}度"
+            else:
+                ac_status[f'{zone}_temp'] = str(temp)
+                result['msg'] = f"{zone}温度已设为{temp}度"
             
         elif action == 'temp_up':
             delta_value = float(delta) if delta else 1
-            for z in zones:
-                current_temp = float(ac_status[f'{z}_temp'])
+            # 如果是同步模式，或者是驾驶员温度调节，同时更新两个区域
+            if ac_status['sync_mode'] or zone == 'driver':
+                current_temp = float(ac_status['driver_temp'])
                 new_temp = min(30, current_temp + delta_value)
-                ac_status[f'{z}_temp'] = new_temp
-            result['msg'] = f"{'、'.join(zones)}温度已升高{delta_value}度"
+                ac_status['driver_temp'] = str(new_temp)
+                ac_status['passenger_temp'] = str(new_temp)
+                result['msg'] = f"温度已升高{delta_value}度"
+            else:
+                current_temp = float(ac_status[f'{zone}_temp'])
+                new_temp = min(30, current_temp + delta_value)
+                ac_status[f'{zone}_temp'] = str(new_temp)
+                result['msg'] = f"{zone}温度已升高{delta_value}度"
             
         elif action == 'temp_down':
             delta_value = float(delta) if delta else 1
-            for z in zones:
-                current_temp = float(ac_status[f'{z}_temp'])
+            # 如果是同步模式，或者是驾驶员温度调节，同时更新两个区域
+            if ac_status['sync_mode'] or zone == 'driver':
+                current_temp = float(ac_status['driver_temp'])
                 new_temp = max(16, current_temp - delta_value)
-                ac_status[f'{z}_temp'] = new_temp
-            result['msg'] = f"{'、'.join(zones)}温度已降低{delta_value}度"
+                ac_status['driver_temp'] = str(new_temp)
+                ac_status['passenger_temp'] = str(new_temp)
+                result['msg'] = f"温度已降低{delta_value}度"
+            else:
+                current_temp = float(ac_status[f'{zone}_temp'])
+                new_temp = max(16, current_temp - delta_value)
+                ac_status[f'{zone}_temp'] = str(new_temp)
+                result['msg'] = f"{zone}温度已降低{delta_value}度"
             
         elif action == 'on':
             ac_status['ac_status'] = 'on'
@@ -1173,8 +1183,16 @@ def control_ac(action=None, value=None, zone='driver', delta=None, mode=None):
             result['msg'] = "空调已关闭"
             
         elif action == 'set_mode' and mode:
-            ac_status['mode'] = mode
-            result['msg'] = f"空调模式已设置为{mode}"
+            if mode == 'sync':
+                # 处理同步模式
+                ac_status['sync_mode'] = True
+                # 同步温度（使用驾驶员温度）
+                driver_temp = ac_status['driver_temp']
+                ac_status['passenger_temp'] = driver_temp
+                result['msg'] = "温度已同步"
+            else:
+                ac_status['mode'] = mode
+                result['msg'] = f"空调模式已设置为{mode}"
             
         else:
             result = {'status': 'error', 'msg': '无效的空调控制命令'}
@@ -1194,10 +1212,19 @@ def control_ac(action=None, value=None, zone='driver', delta=None, mode=None):
 @socketio.on('connect')
 def handle_connect():
     """客户端连接时，发送当前状态"""
+    print('客户端已连接')
+    # 发送空调状态
     socketio.emit('ac_status_update', {
         'status': ac_status,
         'message': '已连接空调控制系统'
     })
+    # 发送通用连接消息
+    socketio.emit('server_response', {'data': '连接成功！'})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    """客户端断开连接时"""
+    print('客户端断开连接')
 
 @socketio.on('request_ac_status')
 def handle_ac_status_request():
@@ -1206,6 +1233,13 @@ def handle_ac_status_request():
         'status': ac_status,
         'message': '空调状态已更新'
     })
+
+# 添加测试消息处理器
+@socketio.on('test_message')
+def handle_test_message(data):
+    """处理前端测试消息"""
+    print(f'收到测试消息: {data}')
+    socketio.emit('server_response', {'data': f'收到消息: {data.get("data", "")}'})
 
 # ===============music_control function=================
 def music_control(action, song_id=None, volume=None, mode=None, shuffle=None):
@@ -1917,129 +1951,394 @@ def handle_navigation_info(data):
 def handle_gear_change(data):
     """处理档位变更"""
     print(f"档位变更: {data}")
-    # 广播档位变更
-    socketio.emit('vehicle_status_update', {'status': data})
+
 
 @socketio.on('lights_change')
 def handle_lights_change(data):
     """处理灯光变更"""
     print(f"灯光变更: {data}")
-    # 广播灯光变更
-    socketio.emit('vehicle_status_update', {'status': data})
 
 #====================模拟器通信====================
-def connect_to_simulator():
-    """连接到模拟器"""
-    global simulator_socket
-    try:
-        simulator_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        simulator_socket.connect(('localhost', 5001))  # 连接到模拟器的新端口
-        simulator_socket.setblocking(False)
-        print("已连接到模拟器")
-        return True
-    except Exception as e:
-        print(f"连接模拟器失败: {e}")
-        if simulator_socket:
-            simulator_socket.close()
-            simulator_socket = None
-        return False
-def receive_simulator_data():
-    """接收模拟器数据"""
-    global simulator_socket, is_running
+# STM32通信状态
+stm32_status = {
+    'connected': False,
+    'last_heartbeat': None,
+    'communication_queue': queue.Queue()
+}
+
+# STM32命令处理器
+class STM32CommandHandler:
+    def __init__(self):
+        self.command_handlers = {
+            # 灯光控制命令
+            'LIGHT_ON_HIGH_BEAM': self.handle_light_on_high_beam,
+            'LIGHT_OFF_HIGH_BEAM': self.handle_light_off_high_beam,
+            'LIGHT_ON_LOW_BEAM': self.handle_light_on_low_beam,
+            'LIGHT_OFF_LOW_BEAM': self.handle_light_off_low_beam,
+            'LIGHT_ON_LEFT_TURN': self.handle_light_on_left_turn,
+            'LIGHT_OFF_LEFT_TURN': self.handle_light_off_left_turn,
+            'LIGHT_ON_RIGHT_TURN': self.handle_light_on_right_turn,
+            'LIGHT_OFF_RIGHT_TURN': self.handle_light_off_right_turn,
+            'LIGHT_ON_POSITION': self.handle_light_on_position,
+            'LIGHT_OFF_POSITION': self.handle_light_off_position,
+            'LIGHT_ON_FOG': self.handle_light_on_fog,
+            'LIGHT_OFF_FOG': self.handle_light_off_fog,
+            'LIGHT_ON_WARNING': self.handle_light_on_warning,
+            'LIGHT_OFF_WARNING': self.handle_light_off_warning,
+            'LIGHT_ALL_OFF': self.handle_light_all_off,
+            
+            # 档位控制命令
+            'GEAR_CHANGE_P': self.handle_gear_change_p,
+            'GEAR_CHANGE_R': self.handle_gear_change_r,
+            'GEAR_CHANGE_N': self.handle_gear_change_n,
+            'GEAR_CHANGE_D': self.handle_gear_change_d,
+            
+            # 速度控制命令
+            'SPEED_SET': self.handle_speed_set,
+            'SPEED_UP': self.handle_speed_up,
+            'SPEED_DOWN': self.handle_speed_down,
+            
+            # 系统命令
+            'HEARTBEAT': self.handle_heartbeat,
+            'STATUS_REQUEST': self.handle_status_request,
+        }
     
-    while is_running:
+    def handle_command(self, command):
+        """处理STM32命令"""
         try:
-            if simulator_socket:
-                try:
-                    # 接收数据
-                    data = simulator_socket.recv(1024)
-                    if data:
-                        try:
-                            # 解析并处理数据
-                            simulator_data = json.loads(data.decode())
-                            print(f"收到模拟器数据: {simulator_data}")
-                            # 通过WebSocket广播状态
-                            formatted_data = {
-                                'status': simulator_data['state'],
-                                'message': '已接收模拟器数据',
-                                'timestamp': simulator_data['timestamp']
-                            }
-                            socketio.emit('simulator_update', formatted_data, namespace='/')
-                        except json.JSONDecodeError:
-                            print("无效的JSON数据")
-                        except Exception as e:
-                            print(f"处理模拟器数据时出错: {e}")
-                    else:
-                        # 连接断开，尝试重连
-                        print("模拟器连接断开，尝试重连...")
-                        simulator_socket.close()
-                        simulator_socket = None
-                        time.sleep(2)
-                        connect_to_simulator()
-                except BlockingIOError:
-                    # 非阻塞模式下没有数据可读
-                    time.sleep(0.1)
-                except Exception as e:
-                    print(f"接收数据时出错: {e}")
-                    time.sleep(0.1)
+            # 解析命令
+            if 'SPEED_SET' in command:
+                # 特殊处理带参数的命令
+                parts = command.split('_')
+                if len(parts) >= 3:
+                    speed = parts[2]
+                    self.handle_speed_set(speed)
+                    return
+            
+            # 查找对应的处理器
+            if command in self.command_handlers:
+                self.command_handlers[command]()
+                print(f"[STM32] 执行命令: {command}")
             else:
-                # 如果没有连接，尝试重连
-                if connect_to_simulator():
-                    print("重新连接成功")
-                else:
-                    time.sleep(2)
+                print(f"[STM32] 未知命令: {command}")
+                
         except Exception as e:
-            print(f"处理模拟器数据时出错: {e}")
-            time.sleep(0.1)
-
-
-
-def run_simulator_loop():
-    """运行模拟器数据接收循环"""
-    try:
-        receive_simulator_data()
-    except Exception as e:
-        print(f"模拟器循环出错: {e}")
-    finally:
-        if simulator_socket:
-            simulator_socket.close()
-
-def start_simulator_connection():
-    """启动模拟器连接"""
-    global simulator_thread, is_running
+            print(f"[STM32] 命令处理错误: {e}")
     
-    is_running = True
-    if connect_to_simulator():
-        # 创建并启动模拟器数据接收线程
-        simulator_thread = threading.Thread(target=run_simulator_loop)
-        simulator_thread.daemon = True
-        simulator_thread.start()
-        return True
-    return False
-
-# 在if __name__ == '__main__'部分之前添加
-def stop_simulator_connection():
-    """停止模拟器连接"""
-    global is_running, simulator_socket, event_loop
+    # 灯光控制处理器
+    def handle_light_on_high_beam(self):
+        """开启远光灯"""
+        vehicle_state['lights']['high_beam'] = True
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '远光灯已开启',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 远光灯已开启")
     
-    is_running = False
-    if simulator_socket:
-        simulator_socket.close()
-        simulator_socket = None
+    def handle_light_off_high_beam(self):
+        """关闭远光灯"""
+        vehicle_state['lights']['high_beam'] = False
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '远光灯已关闭',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 远光灯已关闭")
     
-    if event_loop and event_loop.is_running():
-        event_loop.stop()
+    def handle_light_on_low_beam(self):
+        """开启近光灯"""
+        vehicle_state['lights']['low_beam'] = True
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '近光灯已开启',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 近光灯已开启")
+    
+    def handle_light_off_low_beam(self):
+        """关闭近光灯"""
+        vehicle_state['lights']['low_beam'] = False
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '近光灯已关闭',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 近光灯已关闭")
+    
+    def handle_light_on_left_turn(self):
+        """开启左转向灯"""
+        vehicle_state['lights']['left_turn'] = True
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '左转向灯已开启',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 左转向灯已开启")
+    
+    def handle_light_off_left_turn(self):
+        """关闭左转向灯"""
+        vehicle_state['lights']['left_turn'] = False
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '左转向灯已关闭',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 左转向灯已关闭")
+    
+    def handle_light_on_right_turn(self):
+        """开启右转向灯"""
+        vehicle_state['lights']['right_turn'] = True
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '右转向灯已开启',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 右转向灯已开启")
+    
+    def handle_light_off_right_turn(self):
+        """关闭右转向灯"""
+        vehicle_state['lights']['right_turn'] = False
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '右转向灯已关闭',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 右转向灯已关闭")
+    
+    def handle_light_on_position(self):
+        """开启位置灯"""
+        vehicle_state['lights']['position'] = True
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '位置灯已开启',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 位置灯已开启")
+    
+    def handle_light_off_position(self):
+        """关闭位置灯"""
+        vehicle_state['lights']['position'] = False
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '位置灯已关闭',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 位置灯已关闭")
+    
+    def handle_light_on_fog(self):
+        """开启雾灯"""
+        vehicle_state['lights']['fog'] = True
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '雾灯已开启',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 雾灯已开启")
+    
+    def handle_light_off_fog(self):
+        """关闭雾灯"""
+        vehicle_state['lights']['fog'] = False
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '雾灯已关闭',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 雾灯已关闭")
+    
+    def handle_light_on_warning(self):
+        """开启警示灯"""
+        vehicle_state['lights']['warning'] = True
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '警示灯已开启',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 警示灯已开启")
+    
+    def handle_light_off_warning(self):
+        """关闭警示灯"""
+        vehicle_state['lights']['warning'] = False
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '警示灯已关闭',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 警示灯已关闭")
+    
+    def handle_light_all_off(self):
+        """关闭所有灯"""
+        for light in vehicle_state['lights']:
+            vehicle_state['lights'][light] = False
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '所有灯光已关闭',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 所有灯光已关闭")
+    
+    # 档位控制处理器
+    def handle_gear_change_p(self):
+        """切换到P档"""
+        vehicle_state['gear'] = 'P'
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '已切换到P档',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 已切换到P档")
+    
+    def handle_gear_change_r(self):
+        """切换到R档"""
+        vehicle_state['gear'] = 'R'
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '已切换到R档',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 已切换到R档")
+    
+    def handle_gear_change_n(self):
+        """切换到N档"""
+        vehicle_state['gear'] = 'N'
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '已切换到N档',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 已切换到N档")
+    
+    def handle_gear_change_d(self):
+        """切换到D档"""
+        vehicle_state['gear'] = 'D'
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '已切换到D档',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 已切换到D档")
+    
+    # 速度控制处理器
+    def handle_speed_set(self, speed):
+        """设置速度"""
+        try:
+            speed_value = int(speed)
+            vehicle_state['speed'] = speed_value
+            socketio.emit('simulator_update', {
+                'status': vehicle_state,
+                'message': f'速度已设置为 {speed_value} km/h',
+                'timestamp': datetime.now().isoformat()
+            })
+            print(f"[STM32] 速度已设置为 {speed_value} km/h")
+        except ValueError:
+            print(f"[STM32] 无效的速度值: {speed}")
+    
+    def handle_speed_up(self):
+        """加速"""
+        vehicle_state['speed'] = min(vehicle_state['speed'] + 5, 200)
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '执行加速',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 执行加速")
+    
+    def handle_speed_down(self):
+        """减速"""
+        vehicle_state['speed'] = max(vehicle_state['speed'] - 5, 0)
+        socketio.emit('simulator_update', {
+            'status': vehicle_state,
+            'message': '执行减速',
+            'timestamp': datetime.now().isoformat()
+        })
+        print("[STM32] 执行减速")
+    
+    # 系统命令处理器
+    def handle_heartbeat(self):
+        """处理心跳包"""
+        stm32_status['last_heartbeat'] = time.time()
+        stm32_status['connected'] = True
+        print("[STM32] 收到心跳包")
+    
+    def handle_status_request(self):
+        """处理状态请求"""
+        print("[STM32] 收到状态请求")
+        # 可以在这里发送当前车辆状态给STM32
 
-# 修改main部分
-# Socket.IO事件处理
-@socketio.on('connect')
-def handle_connect():
-    print('客户端已连接')
-    socketio.emit('server_response', {'data': '连接成功！'})
+# 创建STM32命令处理器实例
+stm32_handler = STM32CommandHandler()
 
-@socketio.on('disconnect')
-def handle_disconnect():
-    print('客户端断开连接')
+# STM32模拟器线程
+def stm32_simulator():
+    """STM32模拟器 - 通过控制台输入模拟STM32通信"""
+    print("=" * 60)
+    print("STM32模拟器已启动")
+    print("可用命令:")
+    print("  灯光控制:")
+    print("    LIGHT_ON_HIGH_BEAM / LIGHT_OFF_HIGH_BEAM")
+    print("    LIGHT_ON_LOW_BEAM / LIGHT_OFF_LOW_BEAM")
+    print("    LIGHT_ON_LEFT_TURN / LIGHT_OFF_LEFT_TURN")
+    print("    LIGHT_ON_RIGHT_TURN / LIGHT_OFF_RIGHT_TURN")
+    print("    LIGHT_ON_POSITION / LIGHT_OFF_POSITION")
+    print("    LIGHT_ON_FOG / LIGHT_OFF_FOG")
+    print("    LIGHT_ON_WARNING / LIGHT_OFF_WARNING")
+    print("    LIGHT_ALL_OFF")
+    print("  档位控制:")
+    print("    GEAR_CHANGE_P / GEAR_CHANGE_R / GEAR_CHANGE_N / GEAR_CHANGE_D")
+    print("  速度控制:")
+    print("    SPEED_SET_60 / SPEED_UP / SPEED_DOWN")
+    print("  系统命令:")
+    print("    HEARTBEAT / STATUS_REQUEST")
+    print("  退出: exit")
+    print("=" * 60)
+    
+    while True:
+        try:
+            # 模拟STM32发送命令
+            command = input("[STM32] > ").strip().upper()
+            
+            if command == 'EXIT':
+                print("[STM32] 模拟器退出")
+                break
+            
+            if command:
+                # 处理命令
+                stm32_handler.handle_command(command)
+                
+        except KeyboardInterrupt:
+            print("\n[STM32] 模拟器被中断")
+            break
+        except Exception as e:
+            print(f"[STM32] 错误: {e}")
+
+# Socket.IO事件处理器 - 处理前端到STM32的通信
+@socketio.on('stm32_command')
+def handle_stm32_command(data):
+    """处理前端发送给STM32的命令"""
+    command = data.get('command', '')
+    print(f"[前端->STM32] 收到命令: {command}")
+    
+    # 这里可以添加实际的STM32通信代码
+    # 目前只是打印到控制台
+    print(f"[STM32] 执行前端命令: {command}")
+
+@socketio.on('stm32_status_request')
+def handle_stm32_status_request():
+    """处理前端对STM32状态的请求"""
+    print("[前端->STM32] 状态请求")
+    # 返回STM32状态
+    socketio.emit('stm32_status_response', {
+        'connected': stm32_status['connected'],
+        'last_heartbeat': stm32_status['last_heartbeat']
+    })
+
+# 启动STM32模拟器线程
+def start_stm32_simulator():
+    """启动STM32模拟器"""
+    stm32_thread = threading.Thread(target=stm32_simulator, daemon=True)
+    stm32_thread.start()
+    print("[STM32] 模拟器线程已启动")
+
 
 
 if __name__ == '__main__':
@@ -2047,15 +2346,16 @@ if __name__ == '__main__':
         # 初始化数据库
         init_database()
         
-        # 启动模拟器连接
-        start_simulator_connection()
-
+        # 启动语音循环线程
+        voice_thread = threading.Thread(target=voice_loop, daemon=True)
+        voice_thread.start()
+        print("语音交互线程已启动")
+        
+        # 启动STM32模拟器
+        start_stm32_simulator()
         
         # 启动Flask应用（使用不同的端口）
         socketio.run(app, host='0.0.0.0', port=8080, debug=False)
-    except KeyboardInterrupt:
-        print("\n正在停止服务...")
-        stop_simulator_connection()
+
     except Exception as e:
         print(f"启动失败: {e}")
-        stop_simulator_connection()
