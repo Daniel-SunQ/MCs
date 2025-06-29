@@ -177,5 +177,5 @@ def drowsy_test(yolo_weight_path, vit_model_path, frame_skip, input_resize):
 if __name__ == '__main__':
     yolo_weight = r"/Users/lai/PycharmProjects/vehicleSystem/MCs/runs/detect/train/weights/best.pt"
     vit_weight = r"/Users/lai/PycharmProjects/vehicleSystem/MCs/checkpoints/new_best.pth"
-    drowsy_test(yolo_weight, vit_weight, frame_skip=1, input_resize=800)
+    drowsy_test(yolo_weight, vit_weight, frame_skip=1, input_resize=780)
 
