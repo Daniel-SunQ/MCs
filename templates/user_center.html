@@ -235,9 +235,9 @@
     <div class="user-center-container">
         <!-- 主界面 -->
         <div id="main-view" class="user-center-view active">
-            <img class="user-center-avatar" src="{{ url_for('static', filename='images/avatar.jpg') }}" alt="头像">
-            <div class="user-center-username">张三</div>
-            <div class="user-center-email">user@example.com</div>
+            <img class="user-center-avatar" src="{{ user.avatar if user.avatar else url_for('static', filename='images/avatar.jpg') }}" alt="头像">
+            <div class="user-center-username">{{ user.username }}</div>
+            <div class="user-center-email">{{ user.email }}</div>
             <div class="user-center-section">
                 <h3>账户设置</h3>
                 <ul class="user-center-list">
@@ -450,6 +450,29 @@
             
             // 显示目标界面
             document.getElementById(viewId + '-view').classList.add('active');
+            
+            // 如果是个人资料界面，加载用户数据
+            if (viewId === 'profile') {
+                loadUserProfile();
+            }
+        }
+
+        // 加载用户资料
+        async function loadUserProfile() {
+            try {
+                const response = await fetch('/api/user/profile');
+                if (response.ok) {
+                    const profile = await response.json();
+                    document.getElementById('profile-username').value = profile.username;
+                    document.getElementById('profile-email').value = profile.email;
+                    document.getElementById('profile-phone').value = profile.phone || '';
+                    document.querySelector('#profile-view textarea').value = profile.bio || '';
+                } else {
+                    console.error('加载用户资料失败');
+                }
+            } catch (error) {
+                console.error('网络错误:', error);
+            }
         }
 
         // 为所有功能项添加点击事件
@@ -463,24 +486,189 @@
             });
 
             // 表单提交事件
-            document.getElementById('profile-form').addEventListener('submit', function(e) {
+            document.getElementById('profile-form').addEventListener('submit', async function(e) {
                 e.preventDefault();
-                alert('个人资料已保存！');
-                showView('main');
+                
+                const formData = {
+                    username: document.getElementById('profile-username').value,
+                    email: document.getElementById('profile-email').value,
+                    phone: document.getElementById('profile-phone').value,
+                    bio: document.querySelector('#profile-view textarea').value
+                };
+                
+                try {
+                    const response = await fetch('/api/user/profile', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(formData)
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert('个人资料已保存！');
+                        showView('main');
+                    } else {
+                        alert('保存失败: ' + data.error);
+                    }
+                } catch (error) {
+                    alert('网络错误，请稍后重试');
+                }
             });
 
-            document.getElementById('password-form').addEventListener('submit', function(e) {
+            document.getElementById('password-form').addEventListener('submit', async function(e) {
                 e.preventDefault();
-                alert('密码修改成功！');
-                showView('main');
+                
+                const currentPassword = document.querySelector('#password-view input[type="password"]:nth-of-type(1)').value;
+                const newPassword = document.querySelector('#password-view input[type="password"]:nth-of-type(2)').value;
+                const confirmPassword = document.querySelector('#password-view input[type="password"]:nth-of-type(3)').value;
+                
+                if (newPassword !== confirmPassword) {
+                    alert('两次输入的新密码不一致');
+                    return;
+                }
+                
+                try {
+                    const response = await fetch('/api/user/password', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            current_password: currentPassword,
+                            new_password: newPassword
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        alert('密码修改成功！');
+                        // 清空表单
+                        document.getElementById('password-form').reset();
+                        showView('main');
+                    } else {
+                        alert('密码修改失败: ' + data.error);
+                    }
+                } catch (error) {
+                    alert('网络错误，请稍后重试');
+                }
             });
+
+            // 通知设置保存
+            document.querySelectorAll('#notifications-view input[type="checkbox"]').forEach(checkbox => {
+                checkbox.addEventListener('change', async function() {
+                    const settingKey = this.closest('.setting-item').querySelector('.setting-label').textContent;
+                    const settingValue = this.checked.toString();
+                    
+                    // 映射设置键名
+                    const keyMapping = {
+                        '系统通知': 'system_notifications',
+                        '安全提醒': 'security_alerts',
+                        '驾驶建议': 'driving_suggestions',
+                        '营销信息': 'marketing_info'
+                    };
+                    
+                    const key = keyMapping[settingKey];
+                    if (key) {
+                        try {
+                            await fetch('/api/user/settings', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    [key]: settingValue
+                                })
+                            });
+                        } catch (error) {
+                            console.error('保存设置失败:', error);
+                        }
+                    }
+                });
+            });
+
+            // 隐私设置保存
+            document.querySelectorAll('#privacy-view input[type="checkbox"]').forEach(checkbox => {
+                checkbox.addEventListener('change', async function() {
+                    const settingKey = this.closest('.setting-item').querySelector('.setting-label').textContent;
+                    const settingValue = this.checked.toString();
+                    
+                    // 映射设置键名
+                    const keyMapping = {
+                        '位置信息': 'location_permission',
+                        '语音识别': 'voice_recognition'
+                    };
+                    
+                    const key = keyMapping[settingKey];
+                    if (key) {
+                        try {
+                            await fetch('/api/user/settings', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    [key]: settingValue
+                                })
+                            });
+                        } catch (error) {
+                            console.error('保存设置失败:', error);
+                        }
+                    }
+                });
+            });
+
+            // 加载用户设置
+            loadUserSettings();
         });
+
+        // 加载用户设置
+        async function loadUserSettings() {
+            try {
+                const response = await fetch('/api/user/settings');
+                if (response.ok) {
+                    const settings = await response.json();
+                    
+                    // 设置通知开关
+                    const notificationMappings = {
+                        'system_notifications': '系统通知',
+                        'security_alerts': '安全提醒',
+                        'driving_suggestions': '驾驶建议',
+                        'marketing_info': '营销信息'
+                    };
+                    
+                    Object.entries(notificationMappings).forEach(([key, label]) => {
+                        const checkbox = document.querySelector(`#notifications-view .setting-item:has(.setting-label:contains("${label}")) input[type="checkbox"]`);
+                        if (checkbox && settings[key]) {
+                            checkbox.checked = settings[key] === 'true';
+                        }
+                    });
+                    
+                    // 设置隐私开关
+                    const privacyMappings = {
+                        'location_permission': '位置信息',
+                        'voice_recognition': '语音识别'
+                    };
+                    
+                    Object.entries(privacyMappings).forEach(([key, label]) => {
+                        const checkbox = document.querySelector(`#privacy-view .setting-item:has(.setting-label:contains("${label}")) input[type="checkbox"]`);
+                        if (checkbox && settings[key]) {
+                            checkbox.checked = settings[key] === 'true';
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('加载用户设置失败:', error);
+            }
+        }
 
         // 退出登录函数
         function logout() {
             if (confirm('确定要退出登录吗？')) {
-                alert('已退出登录');
-                window.location.href = '/';
+                window.location.href = '/logout';
             }
         }
     </script>
